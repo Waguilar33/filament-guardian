@@ -163,21 +163,20 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
 
     protected function registerSuperAdminProtection(): void
     {
-        if (! Guardian::isSuperAdminEnabled()) {
-            return;
-        }
-
         $registrar = app(PermissionRegistrar::class);
 
         /** @var class-string $roleClass */
         $roleClass = $registrar->getRoleClass();
 
-        $superAdminRoleName = Guardian::getSuperAdminRoleName();
-
         // Prevent updating super-admin role (check original name since $role->name may be dirty)
-        $roleClass::updating(function (Role & Model $role) use ($superAdminRoleName): void {
+        // Role name is resolved at runtime to support per-panel configuration
+        $roleClass::updating(function (Role & Model $role): void {
+            if (! Guardian::isSuperAdminEnabled()) {
+                return;
+            }
+
             $originalName = $role->getOriginal('name');
-            if ($originalName === $superAdminRoleName) {
+            if ($originalName === Guardian::getSuperAdminRoleName()) {
                 throw new SuperAdminProtectedException(
                     __('filament-guardian::filament-guardian.super_admin.cannot_edit')
                 );
@@ -185,8 +184,12 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         });
 
         // Prevent deleting super-admin role
-        $roleClass::deleting(function (Role $role) use ($superAdminRoleName): void {
-            if ($role->name === $superAdminRoleName) {
+        $roleClass::deleting(function (Role $role): void {
+            if (! Guardian::isSuperAdminEnabled()) {
+                return;
+            }
+
+            if ($role->name === Guardian::getSuperAdminRoleName()) {
                 throw new SuperAdminProtectedException(
                     __('filament-guardian::filament-guardian.super_admin.cannot_delete')
                 );
@@ -217,10 +220,11 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             /** @var class-string $tenantModel */
             $tenantModel = $panel->getTenantModel();
             $guard = $panel->getAuthGuard();
+            $panelId = $panel->getId();
 
             // Register created observer for tenant model
-            $tenantModel::created(function (Model $tenant) use ($guard): void {
-                Guardian::createSuperAdminRoleForTenant($tenant, $guard);
+            $tenantModel::created(function (Model $tenant) use ($guard, $panelId): void {
+                Guardian::createSuperAdminRoleForTenant($tenant, $guard, $panelId);
             });
         }
     }

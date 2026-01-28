@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian;
 
 use Closure;
+use Exception;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,30 @@ use Spatie\Permission\Traits\HasRoles;
 
 class FilamentGuardian
 {
+    /**
+     * Resolve the FilamentGuardianPlugin for a specific panel or the current panel.
+     *
+     * @param  string|null  $panelId  Panel ID to resolve, or null to use current panel
+     */
+    protected function resolvePluginForPanel(?string $panelId): ?FilamentGuardianPlugin
+    {
+        $panel = $panelId !== null
+            ? Filament::getPanel($panelId)
+            : Filament::getCurrentPanel();
+
+        if ($panel === null) {
+            return null;
+        }
+
+        try {
+            $plugin = $panel->getPlugin('filament-guardian');
+
+            return $plugin instanceof FilamentGuardianPlugin ? $plugin : null;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
     /**
      * Get the unique validation closure for role names.
      * Scopes uniqueness by guard and team (using Spatie's context).
@@ -41,9 +66,17 @@ class FilamentGuardian
 
     /**
      * Check if super-admin support is enabled.
+     *
+     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
      */
-    public function isSuperAdminEnabled(): bool
+    public function isSuperAdminEnabled(?string $panelId = null): bool
     {
+        $plugin = $this->resolvePluginForPanel($panelId);
+
+        if ($plugin !== null) {
+            return $plugin->isSuperAdminEnabled();
+        }
+
         /** @var bool $enabled */
         $enabled = config('filament-guardian.super_admin.enabled', false);
 
@@ -52,9 +85,17 @@ class FilamentGuardian
 
     /**
      * Get the configured super-admin role name.
+     *
+     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
      */
-    public function getSuperAdminRoleName(): string
+    public function getSuperAdminRoleName(?string $panelId = null): string
     {
+        $plugin = $this->resolvePluginForPanel($panelId);
+
+        if ($plugin !== null) {
+            return $plugin->getSuperAdminRoleName();
+        }
+
         /** @var string $name */
         $name = config('filament-guardian.super_admin.role_name', 'Super Admin');
 
@@ -63,9 +104,17 @@ class FilamentGuardian
 
     /**
      * Get the configured intercept mode ('before' or 'after').
+     *
+     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
      */
-    public function getSuperAdminIntercept(): string
+    public function getSuperAdminIntercept(?string $panelId = null): string
     {
+        $plugin = $this->resolvePluginForPanel($panelId);
+
+        if ($plugin !== null) {
+            return $plugin->getSuperAdminIntercept();
+        }
+
         /** @var string $mode */
         $mode = config('filament-guardian.super_admin.intercept', 'before');
 
@@ -108,19 +157,29 @@ class FilamentGuardian
     }
 
     /**
-     * Create the super-admin role for the current Filament context.
+     * Create the super-admin role for a panel context.
      *
-     * Uses the current panel's guard and tenant (if applicable).
+     * Uses the panel's guard and tenant (if applicable).
      * The role has no permissions assigned - it bypasses checks via Gate.
      *
-     * Note: This method requires an active Filament panel context.
-     * For seeders/commands, use createSuperAdminRoleForPanel() instead.
+     * @param  string|null  $panelId  Panel ID to use, or null to use current panel context
+     *
+     * @throws RuntimeException If the panel has tenancy enabled (use createSuperAdminRoleForTenant instead)
      *
      * @api
      */
-    public function createSuperAdminRole(): Role
+    public function createSuperAdminRole(?string $panelId = null): Role
     {
-        $panel = Filament::getCurrentPanel();
+        $panel = $panelId !== null
+            ? Filament::getPanel($panelId)
+            : Filament::getCurrentPanel();
+
+        if ($panel !== null && $panel->hasTenancy()) {
+            throw new RuntimeException(
+                "Panel '{$panel->getId()}' has tenancy enabled. Super-admin roles are auto-created when tenants are created. Use createSuperAdminRoleForTenant() instead."
+            );
+        }
+
         $guard = $panel?->getAuthGuard() ?? 'web';
         $registrar = app(PermissionRegistrar::class);
 
@@ -128,7 +187,7 @@ class FilamentGuardian
         $roleClass = $registrar->getRoleClass();
 
         $attributes = [
-            'name' => $this->getSuperAdminRoleName(),
+            'name' => $this->getSuperAdminRoleName($panelId),
             'guard_name' => $guard,
         ];
 
@@ -151,9 +210,11 @@ class FilamentGuardian
      * Used by the tenant observer when a new tenant is created.
      * Always includes tenant scoping regardless of current context.
      *
+     * @param  string|null  $panelId  Panel ID to get role name from, or null to use current panel context
+     *
      * @api
      */
-    public function createSuperAdminRoleForTenant(Model $tenant, string $guard): Role
+    public function createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null): Role
     {
         $registrar = app(PermissionRegistrar::class);
 
@@ -167,7 +228,7 @@ class FilamentGuardian
         $tenantKey = $tenant->getKey();
 
         $attributes = [
-            'name' => $this->getSuperAdminRoleName(),
+            'name' => $this->getSuperAdminRoleName($panelId),
             'guard_name' => $guard,
             $teamKey => $tenantKey,
         ];
@@ -179,59 +240,30 @@ class FilamentGuardian
     }
 
     /**
-     * Create the super-admin role for a specific panel (non-tenant).
+     * Get the super-admin role for a panel context.
      *
-     * Use this in seeders and commands where no Filament context exists.
-     * This method only works for panels WITHOUT tenancy.
+     * @param  string|null  $panelId  Panel ID to use, or null to use current panel context
      *
      * @throws RuntimeException If the panel has tenancy enabled
      *
      * @api
      */
-    public function createSuperAdminRoleForPanel(string $panelId): Role
+    public function getSuperAdminRole(?string $panelId = null): ?Role
     {
-        $panel = Filament::getPanel($panelId);
-
-        if ($panel->hasTenancy()) {
-            throw new RuntimeException(
-                "Panel '{$panelId}' has tenancy enabled. Super-admin roles are auto-created when tenants are created. Use createSuperAdminRoleForTenant() instead."
-            );
-        }
-
-        $guard = $panel->getAuthGuard();
-        $registrar = app(PermissionRegistrar::class);
-
-        /** @var class-string<Role> $roleClass */
-        $roleClass = $registrar->getRoleClass();
-
-        $attributes = [
-            'name' => $this->getSuperAdminRoleName(),
-            'guard_name' => $guard,
-        ];
-
-        // Non-tenant panels don't have team scoping, so no team key needed
-
-        /** @var Role $role */
-        $role = $roleClass::query()->firstOrCreate($attributes);
-
-        return $role;
-    }
-
-    /**
-     * Get the super-admin role for the current Filament context.
-     *
-     * Note: This method requires an active Filament panel context.
-     * For seeders/commands, use getSuperAdminRoleForPanel() instead.
-     *
-     * @api
-     */
-    public function getSuperAdminRole(): ?Role
-    {
-        if (! $this->isSuperAdminEnabled()) {
+        if (! $this->isSuperAdminEnabled($panelId)) {
             return null;
         }
 
-        $panel = Filament::getCurrentPanel();
+        $panel = $panelId !== null
+            ? Filament::getPanel($panelId)
+            : Filament::getCurrentPanel();
+
+        if ($panel !== null && $panel->hasTenancy()) {
+            throw new RuntimeException(
+                "Panel '{$panel->getId()}' has tenancy enabled. Use getSuperAdminRole() within Filament context (with tenant set) instead."
+            );
+        }
+
         $guard = $panel?->getAuthGuard() ?? 'web';
         $registrar = app(PermissionRegistrar::class);
 
@@ -239,7 +271,7 @@ class FilamentGuardian
         $roleClass = $registrar->getRoleClass();
 
         $query = $roleClass::query()
-            ->where('name', $this->getSuperAdminRoleName())
+            ->where('name', $this->getSuperAdminRoleName($panelId))
             ->where('guard_name', $guard);
 
         // Scope by team if teams mode is enabled
@@ -256,45 +288,6 @@ class FilamentGuardian
     }
 
     /**
-     * Get the super-admin role for a specific panel (non-tenant).
-     *
-     * Use this in seeders and commands where no Filament context exists.
-     *
-     * @throws RuntimeException If the panel has tenancy enabled
-     *
-     * @api
-     */
-    public function getSuperAdminRoleForPanel(string $panelId): ?Role
-    {
-        if (! $this->isSuperAdminEnabled()) {
-            return null;
-        }
-
-        $panel = Filament::getPanel($panelId);
-
-        if ($panel->hasTenancy()) {
-            throw new RuntimeException(
-                "Panel '{$panelId}' has tenancy enabled. Use getSuperAdminRole() within Filament context instead."
-            );
-        }
-
-        $guard = $panel->getAuthGuard();
-        $registrar = app(PermissionRegistrar::class);
-
-        /** @var class-string<Role> $roleClass */
-        $roleClass = $registrar->getRoleClass();
-
-        // Non-tenant panels don't have team scoping
-        /** @var Role|null $role */
-        $role = $roleClass::query()
-            ->where('name', $this->getSuperAdminRoleName())
-            ->where('guard_name', $guard)
-            ->first();
-
-        return $role;
-    }
-
-    /**
      * Assign the super-admin role to a user.
      *
      * @param  string|null  $panelId  Panel ID for non-tenant panels. If null, uses current Filament context.
@@ -303,9 +296,7 @@ class FilamentGuardian
      */
     public function assignSuperAdminTo(Authenticatable $user, ?string $panelId = null): void
     {
-        $role = $panelId !== null
-            ? $this->getSuperAdminRoleForPanel($panelId)
-            : $this->getSuperAdminRole();
+        $role = $this->getSuperAdminRole($panelId);
 
         if ($role === null) {
             throw new RuntimeException('Super-admin role does not exist. Ensure super-admin is enabled and the role has been created.');

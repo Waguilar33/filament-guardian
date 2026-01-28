@@ -13,16 +13,14 @@ use Spatie\Permission\Models\Role;
 
 /**
  * @method static Closure uniqueRoleValidation()
- * @method static bool isSuperAdminEnabled()
- * @method static string getSuperAdminRoleName()
- * @method static string getSuperAdminIntercept()
+ * @method static bool isSuperAdminEnabled(?string $panelId = null)
+ * @method static string getSuperAdminRoleName(?string $panelId = null)
+ * @method static string getSuperAdminIntercept(?string $panelId = null)
  * @method static bool isSuperAdminRole(RoleContract $role)
  * @method static bool userIsSuperAdmin(mixed $user)
- * @method static Role createSuperAdminRole()
- * @method static Role createSuperAdminRoleForTenant(Model $tenant, string $guard)
- * @method static Role createSuperAdminRoleForPanel(string $panelId)
- * @method static Role|null getSuperAdminRole()
- * @method static Role|null getSuperAdminRoleForPanel(string $panelId)
+ * @method static Role createSuperAdminRole(?string $panelId = null)
+ * @method static Role createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null)
+ * @method static Role|null getSuperAdminRole(?string $panelId = null)
  * @method static void assignSuperAdminTo(Authenticatable $user, ?string $panelId = null)
  *
  * @see \Waguilar\FilamentGuardian\FilamentGuardian
