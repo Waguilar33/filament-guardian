@@ -68,7 +68,7 @@ class SetupSuperAdminCommand extends Command
         }
 
         // Create the super-admin role
-        $role = Guardian::createSuperAdminRoleForPanel($panelId);
+        $role = Guardian::createSuperAdminRole($panelId);
         $this->components->info("Super-admin role created/verified for panel '{$panelId}'");
         $this->components->twoColumnDetail('Role', $role->name);
         $this->components->twoColumnDetail('Guard', $role->guard_name);

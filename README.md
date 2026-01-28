@@ -188,10 +188,20 @@ Users with the super-admin role bypass all permission checks via Laravel's Gate.
 
 ### Per-Panel Configuration
 
+Override global config settings per panel using the fluent API:
+
 ```php
 FilamentGuardianPlugin::make()
-    ->superAdmin(false) // Disable for this panel
+    ->superAdmin()                        // Enable for this panel (default: from config)
+    ->superAdminRoleName('Administrator') // Custom role name for this panel
+    ->superAdminIntercept('after')        // 'before' or 'after' for this panel
 ```
+
+| Method | Description |
+|--------|-------------|
+| `superAdmin(bool)` | Enable/disable super-admin for this panel |
+| `superAdminRoleName(string)` | Set custom role name (default: from config) |
+| `superAdminIntercept(string)` | Set intercept mode: `'before'` or `'after'` (default: from config) |
 
 ### Auto-Created Roles for Tenant Panels
 
@@ -207,19 +217,43 @@ php artisan guardian:super-admin --panel=admin
 php artisan guardian:super-admin --panel=admin --email=admin@example.com
 ```
 
-### Assigning Super Admin in Code
+### Facade Methods
+
+All methods accept an optional `$panelId` parameter. When omitted, they use the current Filament panel context. When provided, they use that panel's configuration.
 
 ```php
 use Waguilar\FilamentGuardian\Facades\Guardian;
 
-// For non-tenant panels
-Guardian::createSuperAdminRoleForPanel('admin');
+// Check if super-admin is enabled
+Guardian::isSuperAdminEnabled();           // Uses current panel context
+Guardian::isSuperAdminEnabled('admin');    // Uses 'admin' panel config
+
+// Get configuration values
+Guardian::getSuperAdminRoleName();         // Uses current panel context
+Guardian::getSuperAdminRoleName('admin');  // Uses 'admin' panel config
+Guardian::getSuperAdminIntercept('admin'); // Get intercept mode for panel
+
+// Create/get super-admin role (non-tenant panels only)
+Guardian::createSuperAdminRole('admin');
+Guardian::getSuperAdminRole('admin');
+
+// Assign super-admin role to a user
 Guardian::assignSuperAdminTo($user, 'admin');
 
-// For tenant panels (set team context first)
+// For tenant panels (role auto-created, set team context first)
 setPermissionsTeamId($tenant->getKey());
 $user->assignRole(Guardian::getSuperAdminRoleName());
 ```
+
+| Method | Description |
+|--------|-------------|
+| `isSuperAdminEnabled(?string $panelId)` | Check if super-admin is enabled |
+| `getSuperAdminRoleName(?string $panelId)` | Get the role name |
+| `getSuperAdminIntercept(?string $panelId)` | Get intercept mode |
+| `createSuperAdminRole(?string $panelId)` | Create role for non-tenant panel |
+| `getSuperAdminRole(?string $panelId)` | Get role for non-tenant panel |
+| `assignSuperAdminTo($user, ?string $panelId)` | Assign role to user |
+| `createSuperAdminRoleForTenant($tenant, $guard, ?$panelId)` | Create role for tenant |
 
 ### Protection
 

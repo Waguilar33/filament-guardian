@@ -24,6 +24,10 @@ class FilamentGuardianPlugin implements Plugin
 
     protected ?bool $superAdminEnabled = null;
 
+    protected ?string $superAdminRoleName = null;
+
+    protected ?string $superAdminIntercept = null;
+
     public function getId(): string
     {
         return 'filament-guardian';
@@ -158,5 +162,65 @@ class FilamentGuardianPlugin implements Plugin
         $enabled = config('filament-guardian.super_admin.enabled', false);
 
         return $enabled;
+    }
+
+    /**
+     * Set the super-admin role name for this panel.
+     *
+     * @api
+     */
+    public function superAdminRoleName(string $name): static
+    {
+        $this->superAdminRoleName = $name;
+
+        return $this;
+    }
+
+    /**
+     * Get the super-admin role name for this panel.
+     *
+     * Returns plugin-specific setting if set, otherwise falls back to config.
+     */
+    public function getSuperAdminRoleName(): string
+    {
+        if ($this->superAdminRoleName !== null) {
+            return $this->superAdminRoleName;
+        }
+
+        /** @var string $name */
+        $name = config('filament-guardian.super_admin.role_name', 'Super Admin');
+
+        return $name;
+    }
+
+    /**
+     * Set the super-admin intercept mode for this panel.
+     *
+     * @param  string  $mode  Either 'before' or 'after'
+     *
+     * @api
+     */
+    public function superAdminIntercept(string $mode): static
+    {
+        $this->superAdminIntercept = $mode;
+
+        return $this;
+    }
+
+    /**
+     * Get the super-admin intercept mode for this panel.
+     *
+     * Returns plugin-specific setting if set, otherwise falls back to config.
+     */
+    public function getSuperAdminIntercept(): string
+    {
+        if ($this->superAdminIntercept !== null) {
+            return $this->superAdminIntercept;
+        }
+
+        /** @var string $mode */
+        $mode = config('filament-guardian.super_admin.intercept', 'before');
+
+        return $mode;
     }
 }
