@@ -52,7 +52,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                     ->publishConfigFile()
                     ->publishMigrations()
                     ->askToRunMigrations()
-                    ->askToStarRepoOnGitHub('waguilar/filament-guardian');
+                    ->askToStarRepoOnGitHub('Waguilar33/filament-guardian');
             });
 
         $configFileName = $package->shortName();
@@ -270,7 +270,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
 
     protected function getAssetPackageName(): ?string
     {
-        return 'waguilar/filament-guardian';
+        return 'waguilar33/filament-guardian';
     }
 
     /**

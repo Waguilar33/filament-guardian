@@ -12,7 +12,7 @@ Role and permission management for Filament panels using [Spatie Laravel Permiss
 ## Installation
 
 ```bash
-composer require waguilar/filament-guardian
+composer require waguilar33/filament-guardian
 ```
 
 ## Spatie Setup
