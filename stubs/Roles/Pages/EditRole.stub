@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Pages;
+
+use Waguilar\FilamentGuardian\Base\Roles\Pages\BaseEditRole;
+use {{ namespace }}\RoleResource;
+
+class EditRole extends BaseEditRole
+{
+    protected static string $resource = RoleResource::class;
+}

@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Tables;
+
+use Waguilar\FilamentGuardian\Base\Roles\Tables\BaseRolesTable;
+
+class RolesTable extends BaseRolesTable
+{
+    //
+}

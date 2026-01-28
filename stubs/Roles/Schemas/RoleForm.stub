@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Schemas;
+
+use Waguilar\FilamentGuardian\Base\Roles\Schemas\BaseRoleForm;
+
+class RoleForm extends BaseRoleForm
+{
+    //
+}

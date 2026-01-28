@@ -1,0 +1,80 @@
+{
+    "name": "waguilar33/filament-guardian",
+    "description": "Role and permission management for Filament",
+    "keywords": [
+        "waguilar33",
+        "laravel",
+        "filamentphp",
+        "filament-guardian"
+    ],
+    "homepage": "https://github.com/Waguilar33/filament-guardian",
+    "support": {
+        "issues": "https://github.com/Waguilar33/filament-guardian/issues",
+        "source": "https://github.com/Waguilar33/filament-guardian"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "William Aguilar",
+            "email": "waa2398@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "filament/filament": "^4.0",
+        "spatie/laravel-package-tools": "^1.15.0",
+        "spatie/laravel-permission": "^6.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "nunomaduro/collision": "^8.0",
+        "orchestra/testbench": "^9.0|^10.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-arch": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0",
+        "pestphp/pest-plugin-livewire": "^3.0",
+        "phpstan/extension-installer": "^1.1",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Waguilar\\FilamentGuardian\\": "src/",
+            "Waguilar\\FilamentGuardian\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Waguilar\\FilamentGuardian\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@php ./vendor/bin/testbench package:discover --ansi",
+        "analyse": "phpstan analyse",
+        "lint": "pint",
+        "test": "pest",
+        "test:lint": "pint --test"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Waguilar\\FilamentGuardian\\FilamentGuardianServiceProvider"
+            ],
+            "aliases": {
+                "FilamentGuardian": "Waguilar\\FilamentGuardian\\Facades\\FilamentGuardian"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true,
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
