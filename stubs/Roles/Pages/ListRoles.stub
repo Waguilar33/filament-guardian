@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Pages;
+
+use Waguilar\FilamentGuardian\Base\Roles\Pages\BaseListRoles;
+use {{ namespace }}\RoleResource;
+
+class ListRoles extends BaseListRoles
+{
+    protected static string $resource = RoleResource::class;
+}

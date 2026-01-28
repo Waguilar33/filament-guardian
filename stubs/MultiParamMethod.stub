@@ -1,0 +1,5 @@
+
+    public function {{ methodName }}({{ authModelName }} ${{ authModelVariable }}, {{ modelName }} ${{ modelVariable }}): bool
+    {
+        return ${{ authModelVariable }}->can('{{ permission }}', $this->getGuard());
+    }

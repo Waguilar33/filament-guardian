@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Pages;
+
+use Waguilar\FilamentGuardian\Base\Roles\Pages\BaseViewRole;
+use {{ namespace }}\RoleResource;
+
+class ViewRole extends BaseViewRole
+{
+    protected static string $resource = RoleResource::class;
+}

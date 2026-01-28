@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ authModelFqcn }};
+use Filament\Facades\Filament;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class {{ modelPolicy }}
+{
+    use HandlesAuthorization;
+
+    protected function getGuard(): ?string
+    {
+        return Filament::getCurrentPanel()?->getAuthGuard();
+    }
+{{ methods }}
+}
