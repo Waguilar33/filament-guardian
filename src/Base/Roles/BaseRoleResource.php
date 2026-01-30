@@ -26,13 +26,6 @@ abstract class BaseRoleResource extends Resource
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-shield-check';
 
     /**
-     * Disable Filament's relationship-based tenant scoping.
-     * Spatie's permission package handles scoping via team_id global scope,
-     * which is set by the SetPermissionsTeam middleware.
-     */
-    protected static bool $isScopedToTenant = false;
-
-    /**
      * @return class-string<Model>
      */
     public static function getModel(): string
@@ -44,21 +37,19 @@ abstract class BaseRoleResource extends Resource
     }
 
     /**
+     * Filter roles by the current panel's guard.
+     * Tenant scoping is handled by Spatie's global scope via SetPermissionsTeam middleware.
+     *
      * @return Builder<Model>
      */
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
         $panel = Filament::getCurrentPanel();
-        $teamForeignKey = is_string($fk = config('permission.column_names.team_foreign_key')) ? $fk : 'team_id';
 
-        $query->whereRaw('guard_name = ?', [$panel?->getAuthGuard()]);
-
-        if ($panel?->hasTenancy()) {
-            $query->whereRaw("{$teamForeignKey} = ?", [Filament::getTenant()?->getKey()]);
-        } else {
-            $query->whereNull($teamForeignKey);
-        }
+        $query
+            ->whereRaw('guard_name = ?', [$panel?->getAuthGuard()])
+            ->with('permissions');
 
         return $query;
     }

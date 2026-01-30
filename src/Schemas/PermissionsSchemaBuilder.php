@@ -37,6 +37,13 @@ final class PermissionsSchemaBuilder
     /** @var Collection<int, string> */
     private Collection $roleBasedPermissions;
 
+    /**
+     * Lookup array for O(1) permission containment checks.
+     *
+     * @var array<string, true>
+     */
+    private array $roleBasedPermissionsLookup = [];
+
     private bool $showSelectAllAction = true;
 
     private RolePermissionData $data;
@@ -72,9 +79,17 @@ final class PermissionsSchemaBuilder
         $typed = $permissions->values();
         $this->roleBasedPermissions = $typed;
 
+        // Build lookup array for O(1) containment checks
+        $this->roleBasedPermissionsLookup = array_fill_keys($typed->all(), true);
+
         return $this;
     }
 
+    /**
+     * Show or hide the select all toggle.
+     *
+     * @api
+     */
     public function showSelectAllAction(bool $show = true): self
     {
         $this->showSelectAllAction = $show;
@@ -98,6 +113,8 @@ final class PermissionsSchemaBuilder
 
     /**
      * Get all permission field names used in the schema.
+     *
+     * @api
      *
      * @return array<int, string>
      */
@@ -126,6 +143,8 @@ final class PermissionsSchemaBuilder
 
     /**
      * Get all available permissions.
+     *
+     * @api
      *
      * @return array<int, string>
      */
@@ -227,7 +246,7 @@ final class PermissionsSchemaBuilder
     {
         $data = $this->data;
         $plugin = FilamentGuardianPlugin::get();
-        $roleBasedPermissions = $this->roleBasedPermissions;
+        $roleBasedLookup = $this->roleBasedPermissionsLookup;
         $isUserMode = $this->mode === self::MODE_USER;
 
         return Toggle::make('select_all')
@@ -238,20 +257,17 @@ final class PermissionsSchemaBuilder
             ->live()
             ->dehydrated(false)
             ->extraFieldWrapperAttributes(['class' => 'flex justify-end'])
-            ->afterStateHydrated(function (Toggle $component, Get $get) use ($data, $roleBasedPermissions, $isUserMode): void {
-                $component->state($this->areAllPermissionsSelected($get, $data, $roleBasedPermissions, $isUserMode));
+            ->afterStateHydrated(function (Toggle $component, Get $get) use ($data, $roleBasedLookup, $isUserMode): void {
+                $component->state($this->areAllPermissionsSelected($get, $data, $roleBasedLookup, $isUserMode));
             })
-            ->afterStateUpdated(function (bool $state, Set $set) use ($data, $roleBasedPermissions, $isUserMode): void {
+            ->afterStateUpdated(function (bool $state, Set $set) use ($data, $roleBasedLookup, $isUserMode): void {
                 foreach ($data->getResources() as $subject => $resource) {
                     $fieldName = 'resource_' . mb_strtolower($subject) . '_permissions';
                     $allOptions = array_keys($resource['options']);
 
-                    // In user mode, filter out role-based permissions from options
+                    // In user mode, filter out role-based permissions from options (O(1) lookup)
                     if ($isUserMode) {
-                        $allOptions = array_values(array_filter(
-                            $allOptions,
-                            fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                        ));
+                        $allOptions = $this->filterOutRoleBased($allOptions, $roleBasedLookup);
                     }
 
                     $set($fieldName, $state ? $allOptions : []);
@@ -261,10 +277,7 @@ final class PermissionsSchemaBuilder
                     $allOptions = $data->getPages()['permissions']->all();
 
                     if ($isUserMode) {
-                        $allOptions = array_values(array_filter(
-                            $allOptions,
-                            fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                        ));
+                        $allOptions = $this->filterOutRoleBased($allOptions, $roleBasedLookup);
                     }
 
                     $set('page_permissions', $state ? $allOptions : []);
@@ -274,10 +287,7 @@ final class PermissionsSchemaBuilder
                     $allOptions = $data->getWidgets()['permissions']->all();
 
                     if ($isUserMode) {
-                        $allOptions = array_values(array_filter(
-                            $allOptions,
-                            fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                        ));
+                        $allOptions = $this->filterOutRoleBased($allOptions, $roleBasedLookup);
                     }
 
                     $set('widget_permissions', $state ? $allOptions : []);
@@ -287,10 +297,7 @@ final class PermissionsSchemaBuilder
                     $allOptions = $data->getCustom()['permissions']->all();
 
                     if ($isUserMode) {
-                        $allOptions = array_values(array_filter(
-                            $allOptions,
-                            fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                        ));
+                        $allOptions = $this->filterOutRoleBased($allOptions, $roleBasedLookup);
                     }
 
                     $set('custom_permissions', $state ? $allOptions : []);
@@ -299,24 +306,38 @@ final class PermissionsSchemaBuilder
     }
 
     /**
-     * @param  Collection<int, string>  $roleBasedPermissions
+     * Filter out role-based permissions using O(1) lookup.
+     *
+     * @param  array<int, string>  $permissions
+     * @param  array<string, true>  $roleBasedLookup
+     * @return array<int, string>
+     */
+    private function filterOutRoleBased(array $permissions, array $roleBasedLookup): array
+    {
+        return array_values(array_filter(
+            $permissions,
+            fn (string $p): bool => ! isset($roleBasedLookup[$p])
+        ));
+    }
+
+    /**
+     * Check if all permissions are selected.
+     *
+     * @param  array<string, true>  $roleBasedLookup
      */
     private function areAllPermissionsSelected(
         Get $get,
         RolePermissionData $data,
-        Collection $roleBasedPermissions,
+        array $roleBasedLookup,
         bool $isUserMode
     ): bool {
         foreach ($data->getResources() as $subject => $resource) {
             $fieldName = 'resource_' . mb_strtolower($subject) . '_permissions';
             $optionCount = count($resource['options']);
 
-            // In user mode, count only non-role-based options
+            // In user mode, count only non-role-based options (O(1) lookup per item)
             if ($isUserMode) {
-                $optionCount = count(array_filter(
-                    array_keys($resource['options']),
-                    fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                ));
+                $optionCount = count($this->filterOutRoleBased(array_keys($resource['options']), $roleBasedLookup));
             }
 
             // Skip if no options available
@@ -334,14 +355,9 @@ final class PermissionsSchemaBuilder
 
         if ($data->hasPages()) {
             $options = $data->getPages()['permissions']->all();
-            $optionCount = count($options);
-
-            if ($isUserMode) {
-                $optionCount = count(array_filter(
-                    $options,
-                    fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                ));
-            }
+            $optionCount = $isUserMode
+                ? count($this->filterOutRoleBased($options, $roleBasedLookup))
+                : count($options);
 
             if ($optionCount > 0) {
                 /** @var array<int, string> $selected */
@@ -354,14 +370,9 @@ final class PermissionsSchemaBuilder
 
         if ($data->hasWidgets()) {
             $options = $data->getWidgets()['permissions']->all();
-            $optionCount = count($options);
-
-            if ($isUserMode) {
-                $optionCount = count(array_filter(
-                    $options,
-                    fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                ));
-            }
+            $optionCount = $isUserMode
+                ? count($this->filterOutRoleBased($options, $roleBasedLookup))
+                : count($options);
 
             if ($optionCount > 0) {
                 /** @var array<int, string> $selected */
@@ -374,14 +385,9 @@ final class PermissionsSchemaBuilder
 
         if ($data->hasCustom()) {
             $options = $data->getCustom()['permissions']->all();
-            $optionCount = count($options);
-
-            if ($isUserMode) {
-                $optionCount = count(array_filter(
-                    $options,
-                    fn (string $p): bool => ! $roleBasedPermissions->contains($p)
-                ));
-            }
+            $optionCount = $isUserMode
+                ? count($this->filterOutRoleBased($options, $roleBasedLookup))
+                : count($options);
 
             if ($optionCount > 0) {
                 /** @var array<int, string> $selected */
@@ -504,6 +510,8 @@ final class PermissionsSchemaBuilder
     /**
      * Filter options to exclude role-based permissions in user mode.
      *
+     * Uses O(1) lookup array for efficient filtering.
+     *
      * @param  array<string, string>  $options
      * @return array<string, string>
      */
@@ -515,7 +523,7 @@ final class PermissionsSchemaBuilder
 
         $filtered = array_filter(
             $options,
-            fn (string $value): bool => ! $this->roleBasedPermissions->contains($value),
+            fn (string $key): bool => ! isset($this->roleBasedPermissionsLookup[$key]),
             ARRAY_FILTER_USE_KEY
         );
 

@@ -11,17 +11,19 @@ use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use RuntimeException;
 use Spatie\Permission\Contracts\Role;
+use Waguilar\FilamentGuardian\Concerns\ExtractsPermissions;
 use Waguilar\FilamentGuardian\Facades\Guardian;
-use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
+use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 use Waguilar\FilamentGuardian\Support\PermissionResolver;
 
 abstract class BaseEditRole extends EditRecord
 {
+    use ExtractsPermissions;
+
     /**
      * Permissions extracted from form data to sync after save.
      *
@@ -64,6 +66,16 @@ abstract class BaseEditRole extends EditRecord
     }
 
     /**
+     * Hide relation managers on edit page - only show on view page.
+     *
+     * @return array<class-string>
+     */
+    public function getRelationManagers(): array
+    {
+        return [];
+    }
+
+    /**
      * Populate form fields with the role's current permissions.
      *
      * @param  array<string, mixed>  $data
@@ -72,11 +84,11 @@ abstract class BaseEditRole extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
-        $keyBuilder = $this->getKeyBuilder();
+        $keyBuilder = FilamentGuardianPlugin::get()->getKeyBuilder();
         $resolver = new PermissionResolver($panel, $panel->getAuthGuard(), $keyBuilder);
 
         $record = $this->record;
-        if (! ($record instanceof Model && $record instanceof Role)) {
+        if (! $record instanceof Role) {
             return $data;
         }
 
@@ -135,52 +147,15 @@ abstract class BaseEditRole extends EditRecord
 
     /**
      * Sync permissions after the role is saved.
+     *
+     * @override Filament lifecycle hook
      */
     protected function afterSave(): void
     {
         $record = $this->record;
 
-        if ($record instanceof Model && $record instanceof Role) {
+        if ($record instanceof Role) {
             $record->syncPermissions($this->permissionsToSync->all());
         }
-    }
-
-    /**
-     * Extract all permission field values from form data.
-     *
-     * @param  array<string, mixed>  $data
-     * @return Collection<int, string>
-     */
-    protected function extractPermissions(array $data): Collection
-    {
-        $excludedKeys = [
-            'name',
-        ];
-
-        /** @var Collection<int, string> $permissions */
-        $permissions = collect($data)
-            ->filter(fn (mixed $value, string $key): bool => ! in_array($key, $excludedKeys, true))
-            ->filter(fn (mixed $value, string $key): bool => ! str_starts_with($key, 'select_all_'))
-            ->filter(fn (mixed $value, string $key): bool => str_ends_with($key, '_permissions'))
-            ->flatMap(fn (mixed $value): array => is_array($value) ? $value : [])
-            ->filter(fn (mixed $value): bool => is_string($value))
-            ->unique()
-            ->values();
-
-        return $permissions;
-    }
-
-    /**
-     * Get the configured permission key builder.
-     */
-    protected function getKeyBuilder(): PermissionKeyBuilder
-    {
-        /** @var string $separator */
-        $separator = config('filament-guardian.permission_key.separator', ':');
-
-        /** @var string $case */
-        $case = config('filament-guardian.permission_key.case', 'pascal');
-
-        return new PermissionKeyBuilder($separator, $case);
     }
 }

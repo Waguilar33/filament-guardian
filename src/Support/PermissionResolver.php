@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian\Support;
 
 use BackedEnum;
+use Filament\Pages\Page;
 use Filament\Panel;
 use Filament\Resources\Resource;
 use Filament\Widgets\WidgetConfiguration;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
+use ReflectionMethod;
+use ReflectionProperty;
 use Spatie\Permission\Models\Permission;
 use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder as PermissionKeyBuilderContract;
 
@@ -26,10 +30,24 @@ final class PermissionResolver
      */
     private ?array $categorized = null;
 
+    /**
+     * Cache of all permissions from database.
+     *
+     * @var Collection<int, string>|null
+     */
+    private ?Collection $allPermissions = null;
+
+    /**
+     * Cache of widget labels.
+     *
+     * @var Collection<string, string>|null
+     */
+    private ?Collection $widgetLabelsCache = null;
+
     public function __construct(
-        private Panel $panel,
-        private string $guard,
-        private PermissionKeyBuilderContract $keyBuilder,
+        private readonly Panel $panel,
+        private readonly string $guard,
+        private readonly PermissionKeyBuilderContract $keyBuilder,
     ) {}
 
     /**
@@ -95,14 +113,22 @@ final class PermissionResolver
     /**
      * Get all permissions from database for the current guard.
      *
+     * Results are cached within the instance to avoid repeated queries.
+     *
      * @return Collection<int, string>
      */
     public function getAllPermissions(): Collection
     {
+        if ($this->allPermissions !== null) {
+            return $this->allPermissions;
+        }
+
         /** @var Collection<int, string> $permissions */
         $permissions = Permission::query()
             ->where('guard_name', $this->guard)
             ->pluck('name');
+
+        $this->allPermissions = $permissions;
 
         return $permissions;
     }
@@ -140,7 +166,7 @@ final class PermissionResolver
 
             if ($icon instanceof BackedEnum) {
                 $icons[$subject] = (string) $icon->value;
-            } elseif ($icon instanceof \Illuminate\Contracts\Support\Htmlable) {
+            } elseif ($icon instanceof Htmlable) {
                 $icons[$subject] = null;
             } else {
                 $icons[$subject] = $icon;
@@ -161,7 +187,7 @@ final class PermissionResolver
 
         /** @var Collection<string, string> $labels */
         $labels = collect($subjects)->map(function (string $pageClass): string {
-            /** @var class-string<\Filament\Pages\Page> $pageClass */
+            /** @var class-string<Page> $pageClass */
             return $pageClass::getNavigationLabel();
         });
 
@@ -171,38 +197,80 @@ final class PermissionResolver
     /**
      * Get widget labels keyed by subject.
      *
+     * Results are cached within the instance to avoid repeated expensive widget instantiation.
+     *
      * @return Collection<string, string>
      */
     public function getWidgetLabels(): Collection
     {
+        if ($this->widgetLabelsCache !== null) {
+            return $this->widgetLabelsCache;
+        }
+
         $subjects = $this->getWidgetSubjects();
 
         /** @var Collection<string, string> $labels */
         $labels = collect($subjects)->map(function (string $widgetClass): string {
-            /** @var object $widget */
-            $widget = app($widgetClass);
+            return $this->resolveWidgetLabel($widgetClass);
+        });
 
-            if (method_exists($widget, 'getHeading')) {
-                /** @var mixed $heading */
-                $heading = $widget->getHeading();
+        $this->widgetLabelsCache = $labels;
+
+        return $labels;
+    }
+
+    /**
+     * Resolve a widget's label without instantiation when possible.
+     *
+     * @param  class-string  $widgetClass
+     */
+    private function resolveWidgetLabel(string $widgetClass): string
+    {
+        // Try to get heading from static property or method first (avoids instantiation)
+        if (method_exists($widgetClass, 'getHeading') && (new ReflectionMethod($widgetClass, 'getHeading'))->isStatic()) {
+            /** @var mixed $heading */
+            $heading = $widgetClass::getHeading();
+
+            if (filled($heading) && is_string($heading)) {
+                return $heading;
+            }
+        }
+
+        // Check for static $heading property
+        if (property_exists($widgetClass, 'heading')) {
+            $reflection = new ReflectionProperty($widgetClass, 'heading');
+            if ($reflection->isStatic()) {
+                $heading = $reflection->getValue();
 
                 if (filled($heading) && is_string($heading)) {
                     return $heading;
                 }
+            }
+        }
 
-                if ($heading instanceof \Illuminate\Contracts\Support\Htmlable) {
-                    return $heading->toHtml();
-                }
+        // Fall back to instantiation only if necessary
+        /** @var object $widget */
+        $widget = app($widgetClass);
+
+        if (method_exists($widget, 'getHeading')) {
+            /** @var mixed $heading */
+            $heading = $widget->getHeading();
+
+            if (filled($heading) && is_string($heading)) {
+                return $heading;
             }
 
-            return str(class_basename($widgetClass))
-                ->kebab()
-                ->replace('-', ' ')
-                ->title()
-                ->toString();
-        });
+            if ($heading instanceof Htmlable) {
+                return $heading->toHtml();
+            }
+        }
 
-        return $labels;
+        // Generate label from class name as last resort
+        return str(class_basename($widgetClass))
+            ->kebab()
+            ->replace('-', ' ')
+            ->title()
+            ->toString();
     }
 
     /**
