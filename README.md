@@ -104,7 +104,46 @@ return [
 ];
 ```
 
-### 2. Modify the Spatie migration for multi-panel support
+### 2. Create a custom Role model with tenant relationship
+
+Create a Role model that extends Spatie's Role and adds the tenant relationship. The relationship name **must match** your Filament panel's `getTenantOwnershipRelationshipName()` (defaults to the lowercase tenant model name).
+
+```php
+// app/Models/Role.php
+namespace App\Models;
+
+use App\Models\Tenant;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Permission\Models\Role as SpatieRole;
+
+class Role extends SpatieRole
+{
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'tenant_id');
+    }
+}
+```
+
+> **Important:** The relationship method name must match your Filament tenant configuration:
+> - If your tenant model is `Team`, the method should be `team()`
+> - If your tenant model is `Tenant`, the method should be `tenant()`
+> - If your tenant model is `Organization`, the method should be `organization()`
+>
+> Or configure a custom name in your panel: `->tenantOwnershipRelationshipName('tenant')`
+
+Register your custom model in Spatie's config:
+
+```php
+// config/permission.php
+return [
+    'models' => [
+        'role' => App\Models\Role::class,
+    ],
+];
+```
+
+### 3. Modify the Spatie migration for multi-panel support
 
 If you have **both** tenant and non-tenant panels, modify Spatie's published migration to make `tenant_id` nullable:
 
@@ -142,7 +181,7 @@ if ($teams) {
 }
 ```
 
-### 3. Configure panel with tenancy
+### 4. Configure panel with tenancy
 
 ```php
 use App\Models\Tenant;
@@ -290,6 +329,86 @@ return $panel
         FilamentGuardianPlugin::make(),
     ]);
 ```
+
+## Filtering Users in Non-Tenant Panels
+
+When you have multiple panels with some having tenancy and others without, you may encounter an issue where the Users relation manager in non-tenant panels shows **all users** instead of only the relevant ones.
+
+### Why This Happens
+
+| Panel Type | User Filtering |
+|------------|----------------|
+| With tenancy | Filament automatically scopes users via tenant ownership relationship |
+| Without tenancy | No automatic scoping - `tenant_id` is `NULL`, no way to identify which users belong to this panel |
+
+In non-tenant panels, there's no built-in mechanism to filter users because:
+- There's no `tenant_id` to filter by
+- Users don't have a `guard` column
+- The panel has no ownership relationship to users
+
+### Solution: Custom User Filtering
+
+You need to implement your own logic to distinguish users that belong to a non-tenant panel. Common approaches:
+
+**1. Add an identifier column to users table:**
+
+```php
+// Migration
+$table->boolean('is_super_admin')->default(false);
+// Or
+$table->string('panel_type')->nullable(); // 'admin', 'app', etc.
+// Or use email domain
+```
+
+**2. Create a scope on your User model:**
+
+```php
+// app/Models/User.php
+public function scopeSuperAdmins(Builder $query): Builder
+{
+    return $query->where('is_super_admin', true);
+}
+
+// Or filter by email domain
+public function scopeAdminUsers(Builder $query): Builder
+{
+    return $query->where('email', 'like', '%@yourcompany.com');
+}
+```
+
+**3. Apply the scope in your published UserResource:**
+
+```php
+// app/Filament/Admin/Resources/UserResource.php
+public static function getEloquentQuery(): Builder
+{
+    return parent::getEloquentQuery()->superAdmins();
+}
+```
+
+**4. Override the UsersRelationManager to filter the attach dropdown:**
+
+```php
+// app/Filament/Admin/Resources/Roles/RelationManagers/UsersRelationManager.php
+use Waguilar\FilamentGuardian\Base\Roles\Tables\BaseUsersTable;
+
+class UsersRelationManager extends BaseUsersRelationManager
+{
+    public function table(Table $table): Table
+    {
+        return BaseUsersTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query) => $query->superAdmins())
+            ->headerActions([
+                AttachAction::make()
+                    ->recordSelectOptionsQuery(fn (Builder $query) => $query->superAdmins())
+                    ->preloadRecordSelect()
+                    ->multiple(),
+            ]);
+    }
+}
+```
+
+> **Note:** `modifyQueryUsing` filters users shown in the relation manager table, while `recordSelectOptionsQuery` filters users shown in the attach dropdown. Both are needed for complete filtering.
 
 ## Configuration Priority Order
 

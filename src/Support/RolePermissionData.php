@@ -6,9 +6,11 @@ namespace Waguilar\FilamentGuardian\Support;
 
 use Filament\Facades\Filament;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use RuntimeException;
 use Spatie\Permission\Contracts\Role;
+use Spatie\Permission\Models\Permission;
 use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder as PermissionKeyBuilderContract;
 use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 
@@ -17,9 +19,18 @@ use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
  *
  * This class separates business logic (permission resolution, categorization, options building)
  * from UI concerns (form/infolist components).
+ *
+ * Uses request-level caching to avoid repeated expensive initialization.
  */
 final class RolePermissionData
 {
+    /**
+     * Request-level cache for RolePermissionData instances keyed by panel ID.
+     *
+     * @var array<string, self>
+     */
+    private static array $cache = [];
+
     private PermissionResolver $resolver;
 
     private PermissionLabelResolver $labelResolver;
@@ -69,13 +80,33 @@ final class RolePermissionData
     }
 
     /**
-     * Create from the current panel context.
+     * Create from the current panel context with request-level caching.
+     *
+     * The same instance is returned for the same panel within a request,
+     * avoiding repeated expensive permission resolution operations.
      */
     public static function make(): self
     {
         $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
+        $panelId = $panel->getId();
 
-        return new self(FilamentGuardianPlugin::get(), $panel);
+        if (! isset(self::$cache[$panelId])) {
+            self::$cache[$panelId] = new self(FilamentGuardianPlugin::get(), $panel);
+        }
+
+        return self::$cache[$panelId];
+    }
+
+    /**
+     * Clear the request-level cache.
+     *
+     * Useful for testing or when permissions are modified during a request.
+     *
+     * @api
+     */
+    public static function clearCache(): void
+    {
+        self::$cache = [];
     }
 
     /**
@@ -188,6 +219,8 @@ final class RolePermissionData
     /**
      * Filter permissions by those assigned to a role.
      *
+     * @api
+     *
      * @param  Collection<int, string>  $permissions
      * @param  Collection<int, string>  $rolePermissions
      * @return Collection<int, string>
@@ -298,12 +331,17 @@ final class RolePermissionData
     /**
      * Get role's permission names as a collection.
      *
+     * @param  Role&Model  $role
      * @return Collection<int, string>
      */
     public function getRolePermissions(Role $role): Collection
     {
+        /** @noinspection PhpUndefinedFieldInspection - permissions is a Spatie HasPermissions trait relationship */
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Permission> $rolePermissions */
+        $rolePermissions = $role->permissions;
+
         /** @var Collection<int, string> $permissions */
-        $permissions = collect($role->permissions->pluck('name'));
+        $permissions = collect($rolePermissions->pluck('name'));
 
         return $permissions;
     }
