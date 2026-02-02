@@ -226,8 +226,8 @@ class FilamentGuardian
         $roleClass = $registrar->getRoleClass();
 
         $query = $roleClass::query()
-            ->where('name', $this->getSuperAdminRoleName($panelId))
-            ->where('guard_name', $guard);
+            ->whereRaw('name = ?', [$this->getSuperAdminRoleName($panelId)])
+            ->whereRaw('guard_name = ?', [$guard]);
 
         if ($registrar->teams) {
             /** @var string $teamKey */

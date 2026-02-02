@@ -19,8 +19,9 @@ trait CreatesPermissions
     {
         $permissionModel = $this->getPermissionModel();
 
-        $exists = $permissionModel::where('name', $name)
-            ->where('guard_name', $guard)
+        $exists = $permissionModel::query()
+            ->whereRaw('name = ?', [$name])
+            ->whereRaw('guard_name = ?', [$guard])
             ->exists();
 
         if (! $exists) {
