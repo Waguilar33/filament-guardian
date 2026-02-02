@@ -22,6 +22,8 @@ use Spatie\Permission\Models\Role;
  * @method static Role createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null)
  * @method static Role|null getSuperAdminRole(?string $panelId = null)
  * @method static void assignSuperAdminTo(Authenticatable $user, ?string $panelId = null)
+ * @method static void createUserUsing(Closure $callback)
+ * @method static Model createUser(string $userModel, array{name: string, email: string, password: string} $data)
  *
  * @see \Waguilar\FilamentGuardian\FilamentGuardian
  */

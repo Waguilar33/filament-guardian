@@ -195,7 +195,6 @@ class SyncPermissionsCommand extends Command
             '<fg=gray>' . count($customKeys) . ' permission(s)</>'
         );
 
-        // Get unique guards from all panels
         $guards = collect($panels)
             ->map(fn (Panel $panel): string => $panel->getAuthGuard())
             ->unique()

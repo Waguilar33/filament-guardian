@@ -293,6 +293,8 @@ $user->assignRole(Guardian::getSuperAdminRoleName());
 | `getSuperAdminRole(?string $panelId)` | Get role for non-tenant panel |
 | `assignSuperAdminTo($user, ?string $panelId)` | Assign role to user |
 | `createSuperAdminRoleForTenant($tenant, $guard, ?$panelId)` | Create role for tenant |
+| `createUserUsing(Closure $callback)` | Register custom user creation logic |
+| `createUser(string $userModel, array $data)` | Create a user (uses callback if registered) |
 
 ### Protection
 
@@ -453,6 +455,34 @@ php artisan guardian:policies --all-panels
 
 # Regenerate existing policies
 php artisan guardian:policies --panel=admin --all-resources --force
+```
+
+### guardian:create-user
+
+Create a new user (useful for first deployment when no users exist):
+
+```bash
+php artisan guardian:create-user
+php artisan guardian:create-user --name="Admin" --email="admin@example.com" --password="secret"
+```
+
+To customize user creation (e.g., set additional fields), register a callback in your `AppServiceProvider`:
+
+```php
+use Waguilar\FilamentGuardian\Facades\Guardian;
+use Illuminate\Support\Facades\Hash;
+
+public function boot(): void
+{
+    Guardian::createUserUsing(function (string $userModel, array $data) {
+        return $userModel::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'is_super_admin' => true,
+        ]);
+    });
+}
 ```
 
 ### guardian:super-admin

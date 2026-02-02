@@ -43,7 +43,6 @@ class FilamentGuardianPlugin implements Plugin
             ]);
         }
 
-        // Register middleware after authentication to apply guard/tenant scoping
         if ($panel->hasTenancy()) {
             $panel->tenantMiddleware([
                 SetPermissionsTeam::class,
@@ -55,10 +54,6 @@ class FilamentGuardianPlugin implements Plugin
         }
     }
 
-    /**
-     * Check if the panel already has a RoleResource registered.
-     * This allows users to publish and customize the resource.
-     */
     protected function panelHasRoleResource(Panel $panel): bool
     {
         return str(
@@ -72,7 +67,6 @@ class FilamentGuardianPlugin implements Plugin
     {
         $this->panel = $panel;
 
-        // Enable teams mode at runtime if panel has tenancy
         if ($panel->hasTenancy()) {
             app(PermissionRegistrar::class)->teams = true;
         }
@@ -97,33 +91,21 @@ class FilamentGuardianPlugin implements Plugin
         return $plugin;
     }
 
-    /**
-     * Get the current panel.
-     */
     public function getPanel(): ?Panel
     {
         return $this->panel;
     }
 
-    /**
-     * Check if the current panel has tenancy enabled.
-     */
     public function hasTenancy(): bool
     {
         return $this->panel?->hasTenancy() ?? false;
     }
 
-    /**
-     * Get the tenant model class from the panel.
-     */
     public function getTenantModel(): ?string
     {
         return $this->panel?->getTenantModel();
     }
 
-    /**
-     * Get the configured permission key builder.
-     */
     public function getKeyBuilder(): PermissionKeyBuilder
     {
         /** @var string $separator */
@@ -135,11 +117,7 @@ class FilamentGuardianPlugin implements Plugin
         return new PermissionKeyBuilder($separator, $case);
     }
 
-    /**
-     * Enable or disable super-admin for this panel.
-     *
-     * @api
-     */
+    /** @api */
     public function superAdmin(bool $enabled = true): static
     {
         $this->superAdminEnabled = $enabled;
@@ -147,11 +125,6 @@ class FilamentGuardianPlugin implements Plugin
         return $this;
     }
 
-    /**
-     * Check if super-admin is enabled for this panel.
-     *
-     * Returns plugin-specific setting if set, otherwise falls back to config.
-     */
     public function isSuperAdminEnabled(): bool
     {
         if ($this->superAdminEnabled !== null) {
@@ -164,11 +137,7 @@ class FilamentGuardianPlugin implements Plugin
         return $enabled;
     }
 
-    /**
-     * Set the super-admin role name for this panel.
-     *
-     * @api
-     */
+    /** @api */
     public function superAdminRoleName(string $name): static
     {
         $this->superAdminRoleName = $name;
@@ -176,11 +145,6 @@ class FilamentGuardianPlugin implements Plugin
         return $this;
     }
 
-    /**
-     * Get the super-admin role name for this panel.
-     *
-     * Returns plugin-specific setting if set, otherwise falls back to config.
-     */
     public function getSuperAdminRoleName(): string
     {
         if ($this->superAdminRoleName !== null) {
@@ -193,13 +157,7 @@ class FilamentGuardianPlugin implements Plugin
         return $name;
     }
 
-    /**
-     * Set the super-admin intercept mode for this panel.
-     *
-     * @param  string  $mode  Either 'before' or 'after'
-     *
-     * @api
-     */
+    /** @api */
     public function superAdminIntercept(string $mode): static
     {
         $this->superAdminIntercept = $mode;
@@ -207,11 +165,6 @@ class FilamentGuardianPlugin implements Plugin
         return $this;
     }
 
-    /**
-     * Get the super-admin intercept mode for this panel.
-     *
-     * Returns plugin-specific setting if set, otherwise falls back to config.
-     */
     public function getSuperAdminIntercept(): string
     {
         if ($this->superAdminIntercept !== null) {

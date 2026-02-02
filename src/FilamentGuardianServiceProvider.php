@@ -21,6 +21,7 @@ use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Spatie\Permission\Contracts\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Waguilar\FilamentGuardian\Commands\CreateUserCommand;
 use Waguilar\FilamentGuardian\Commands\FilamentGuardianCommand;
 use Waguilar\FilamentGuardian\Commands\GeneratePoliciesCommand;
 use Waguilar\FilamentGuardian\Commands\PublishRoleResourceCommand;
@@ -40,11 +41,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
 
     public function configurePackage(Package $package): void
     {
-        /*
-         * This class is a Package Service Provider
-         *
-         * More info: https://github.com/spatie/laravel-package-tools
-         */
         $package->name(static::$name)
             ->hasCommands($this->getCommands())
             ->hasInstallCommand(function (InstallCommand $command) {
@@ -99,7 +95,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
     {
         $packageName = $this->getAssetPackageName();
 
-        // Asset Registration
         if ($packageName !== null) {
             FilamentAsset::register(
                 $this->getAssets(),
@@ -112,13 +107,11 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             );
         }
 
-        // Icon Registration
         $icons = $this->getIcons();
         if ($icons !== []) {
             FilamentIcon::register($icons);
         }
 
-        // Handle Stubs
         if (app()->runningInConsole()) {
             foreach (app(Filesystem::class)->files(__DIR__ . '/../stubs/') as $file) {
                 $this->publishes([
@@ -127,22 +120,12 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             }
         }
 
-        // Testing
         Testable::mixin(new TestsFilamentGuardian);
 
-        // Register super-admin Gate callback
         $this->registerSuperAdminGate();
-
-        // Register super-admin role protection
         $this->registerSuperAdminProtection();
-
-        // Register tenant observer for auto-creating super-admin role
         $this->registerTenantObserver();
-
-        // Listen for TenantSet event to set permissions team ID
         $this->registerTenantSetListener();
-
-        // Set role defaults when creating via Filament
         $this->registerRoleDefaults();
     }
 
@@ -168,8 +151,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         /** @var class-string $roleClass */
         $roleClass = $registrar->getRoleClass();
 
-        // Prevent updating super-admin role (check original name since $role->name may be dirty)
-        // Role name is resolved at runtime to support per-panel configuration
         $roleClass::updating(function (Role & Model $role): void {
             if (! Guardian::isSuperAdminEnabled()) {
                 return;
@@ -183,7 +164,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             }
         });
 
-        // Prevent deleting super-admin role
         $roleClass::deleting(function (Role $role): void {
             if (! Guardian::isSuperAdminEnabled()) {
                 return;
@@ -199,7 +179,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
 
     protected function registerTenantObserver(): void
     {
-        // Get all panels and register observer for each tenant model
         $panels = Filament::getPanels();
 
         foreach ($panels as $panel) {
@@ -207,7 +186,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                 continue;
             }
 
-            // Check if this panel has FilamentGuardian plugin with super-admin enabled
             $plugin = $panel->getPlugin('filament-guardian');
             if (! $plugin instanceof FilamentGuardianPlugin) {
                 continue;
@@ -222,7 +200,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             $guard = $panel->getAuthGuard();
             $panelId = $panel->getId();
 
-            // Register created observer for tenant model
             $tenantModel::created(function (Model $tenant) use ($guard, $panelId): void {
                 Guardian::createSuperAdminRoleForTenant($tenant, $guard, $panelId);
             });
@@ -242,8 +219,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                 return;
             }
 
-            // Only set defaults if not already explicitly set
-            // This allows createSuperAdminRoleForTenant() to work from any panel context
             if ($role->guard_name === null) {
                 $role->guard_name = $panel->getAuthGuard();
             }
@@ -295,6 +270,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
     protected function getCommands(): array
     {
         return [
+            CreateUserCommand::class,
             FilamentGuardianCommand::class,
             GeneratePoliciesCommand::class,
             PublishRoleResourceCommand::class,

@@ -9,6 +9,7 @@ use Exception;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Unique;
 use RuntimeException;
 use Spatie\Permission\Contracts\Role as RoleContract;
@@ -18,11 +19,9 @@ use Spatie\Permission\Traits\HasRoles;
 
 class FilamentGuardian
 {
-    /**
-     * Resolve the FilamentGuardianPlugin for a specific panel or the current panel.
-     *
-     * @param  string|null  $panelId  Panel ID to resolve, or null to use current panel
-     */
+    /** @var (Closure(class-string<Model>, array{name: string, email: string, password: string}): Model)|null */
+    protected ?Closure $createUserCallback = null;
+
     protected function resolvePluginForPanel(?string $panelId): ?FilamentGuardianPlugin
     {
         $panel = $panelId !== null
@@ -43,10 +42,9 @@ class FilamentGuardian
     }
 
     /**
-     * Get the unique validation closure for role names.
-     * Scopes uniqueness by guard and team (using Spatie's context).
-     *
      * @return Closure(Unique): Unique
+     *
+     * @api
      */
     public static function uniqueRoleValidation(): Closure
     {
@@ -64,11 +62,6 @@ class FilamentGuardian
         };
     }
 
-    /**
-     * Check if super-admin support is enabled.
-     *
-     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
-     */
     public function isSuperAdminEnabled(?string $panelId = null): bool
     {
         $plugin = $this->resolvePluginForPanel($panelId);
@@ -83,11 +76,6 @@ class FilamentGuardian
         return $enabled;
     }
 
-    /**
-     * Get the configured super-admin role name.
-     *
-     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
-     */
     public function getSuperAdminRoleName(?string $panelId = null): string
     {
         $plugin = $this->resolvePluginForPanel($panelId);
@@ -102,11 +90,6 @@ class FilamentGuardian
         return $name;
     }
 
-    /**
-     * Get the configured intercept mode ('before' or 'after').
-     *
-     * @param  string|null  $panelId  Panel ID to check, or null to use current panel context
-     */
     public function getSuperAdminIntercept(?string $panelId = null): string
     {
         $plugin = $this->resolvePluginForPanel($panelId);
@@ -121,11 +104,7 @@ class FilamentGuardian
         return $mode;
     }
 
-    /**
-     * Check if the given role is the super-admin role.
-     *
-     * @api
-     */
+    /** @api */
     public function isSuperAdminRole(RoleContract $role): bool
     {
         if (! $this->isSuperAdminEnabled()) {
@@ -135,9 +114,6 @@ class FilamentGuardian
         return $role->name === $this->getSuperAdminRoleName();
     }
 
-    /**
-     * Check if the given user has the super-admin role.
-     */
     public function userIsSuperAdmin(mixed $user): bool
     {
         if (! $this->isSuperAdminEnabled()) {
@@ -157,14 +133,7 @@ class FilamentGuardian
     }
 
     /**
-     * Create the super-admin role for a panel context.
-     *
-     * Uses the panel's guard and tenant (if applicable).
-     * The role has no permissions assigned - it bypasses checks via Gate.
-     *
-     * @param  string|null  $panelId  Panel ID to use, or null to use current panel context
-     *
-     * @throws RuntimeException If the panel has tenancy enabled (use createSuperAdminRoleForTenant instead)
+     * @throws RuntimeException If panel has tenancy enabled
      *
      * @api
      */
@@ -191,7 +160,6 @@ class FilamentGuardian
             'guard_name' => $guard,
         ];
 
-        // Add team key if teams mode is enabled
         if ($registrar->teams) {
             /** @var string $teamKey */
             $teamKey = $registrar->teamsKey;
@@ -204,16 +172,7 @@ class FilamentGuardian
         return $role;
     }
 
-    /**
-     * Create the super-admin role for a specific tenant.
-     *
-     * Used by the tenant observer when a new tenant is created.
-     * Always includes tenant scoping regardless of current context.
-     *
-     * @param  string|null  $panelId  Panel ID to get role name from, or null to use current panel context
-     *
-     * @api
-     */
+    /** @api */
     public function createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null): Role
     {
         $registrar = app(PermissionRegistrar::class);
@@ -240,11 +199,7 @@ class FilamentGuardian
     }
 
     /**
-     * Get the super-admin role for a panel context.
-     *
-     * @param  string|null  $panelId  Panel ID to use, or null to use current panel context
-     *
-     * @throws RuntimeException If the panel has tenancy enabled
+     * @throws RuntimeException If panel has tenancy enabled
      *
      * @api
      */
@@ -274,7 +229,6 @@ class FilamentGuardian
             ->where('name', $this->getSuperAdminRoleName($panelId))
             ->where('guard_name', $guard);
 
-        // Scope by team if teams mode is enabled
         if ($registrar->teams) {
             /** @var string $teamKey */
             $teamKey = $registrar->teamsKey;
@@ -287,13 +241,7 @@ class FilamentGuardian
         return $role;
     }
 
-    /**
-     * Assign the super-admin role to a user.
-     *
-     * @param  string|null  $panelId  Panel ID for non-tenant panels. If null, uses current Filament context.
-     *
-     * @api
-     */
+    /** @api */
     public function assignSuperAdminTo(Authenticatable $user, ?string $panelId = null): void
     {
         $role = $this->getSuperAdminRole($panelId);
@@ -308,5 +256,37 @@ class FilamentGuardian
         }
 
         ([$user, 'assignRole'])($role); // @phpstan-ignore callable.nonCallable
+    }
+
+    /**
+     * @param  Closure(class-string<Model>, array{name: string, email: string, password: string}): Model  $callback
+     *
+     * @api
+     */
+    public function createUserUsing(Closure $callback): void
+    {
+        $this->createUserCallback = $callback;
+    }
+
+    /**
+     * @param  class-string<Model>  $userModel
+     * @param  array{name: string, email: string, password: string}  $data
+     *
+     * @api
+     */
+    public function createUser(string $userModel, array $data): Model
+    {
+        if ($this->createUserCallback !== null) {
+            return ($this->createUserCallback)($userModel, $data);
+        }
+
+        /** @var Model $user */
+        $user = $userModel::query()->create([ // @phpstan-ignore argument.type
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+
+        return $user;
     }
 }
