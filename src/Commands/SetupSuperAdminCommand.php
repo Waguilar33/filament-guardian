@@ -46,7 +46,6 @@ class SetupSuperAdminCommand extends Command
             return self::FAILURE;
         }
 
-        // Validate panel exists
         $panels = Filament::getPanels();
         if (! isset($panels[$panelId])) {
             $this->components->error("Panel '{$panelId}' not found.");
@@ -58,7 +57,6 @@ class SetupSuperAdminCommand extends Command
 
         $panel = $panels[$panelId];
 
-        // Validate panel has no tenancy
         if ($panel->hasTenancy()) {
             $this->components->error("Panel '{$panelId}' has tenancy enabled.");
             $this->components->warn('Super-admin roles are automatically created when tenants are created.');
@@ -67,13 +65,11 @@ class SetupSuperAdminCommand extends Command
             return self::FAILURE;
         }
 
-        // Create the super-admin role
         $role = Guardian::createSuperAdminRole($panelId);
         $this->components->info("Super-admin role created/verified for panel '{$panelId}'");
         $this->components->twoColumnDetail('Role', $role->name);
         $this->components->twoColumnDetail('Guard', $role->guard_name);
 
-        // Assign to user if email provided
         /** @var string|null $email */
         $email = $this->option('email');
 
@@ -110,7 +106,6 @@ class SetupSuperAdminCommand extends Command
             return;
         }
 
-        // Verify user has HasRoles trait
         $usedTraits = class_uses_recursive($user);
         if (! in_array(HasRoles::class, $usedTraits, true)) {
             $this->components->error('User model does not use the HasRoles trait.');
