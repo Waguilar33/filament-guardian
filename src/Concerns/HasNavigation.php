@@ -24,6 +24,8 @@ trait HasNavigation
 
     protected string | Closure | null $navigationLabel = null;
 
+    protected string | Closure | null $cluster = null;
+
     protected string | Closure | null $navigationGroup = null;
 
     protected int | Closure | null $navigationSort = null;
@@ -75,6 +77,14 @@ trait HasNavigation
     public function navigationLabel(string | Closure | null $label): static
     {
         $this->navigationLabel = $label;
+
+        return $this;
+    }
+
+    /** @api */
+    public function cluster(string | Closure | null $cluster): static
+    {
+        $this->cluster = $cluster;
 
         return $this;
     }
@@ -232,6 +242,24 @@ trait HasNavigation
 
         /** @var string|null $configValue */
         $configValue = config('filament-guardian.role_resource.navigation.label');
+
+        return $configValue;
+    }
+
+    /**
+     * @return class-string<\Filament\Clusters\Cluster>|null
+     */
+    public function getCluster(): ?string
+    {
+        if ($this->cluster !== null) {
+            /** @var class-string<\Filament\Clusters\Cluster>|null $result */
+            $result = $this->evaluate($this->cluster);
+
+            return $result;
+        }
+
+        /** @var class-string<\Filament\Clusters\Cluster>|null $configValue */
+        $configValue = config('filament-guardian.role_resource.navigation.cluster');
 
         return $configValue;
     }

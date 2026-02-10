@@ -592,8 +592,41 @@ FilamentGuardianPlugin::make()
     ->navigationBadge(fn () => Role::count())
     ->navigationBadgeColor('success')
     ->navigationParentItem('settings')
+    ->cluster(\App\Filament\Clusters\Settings::class)
     ->registerNavigation(true)
 ```
+
+### Cluster
+
+Place the Role resource inside a cluster so it appears under that cluster's sub-navigation.
+
+```php
+FilamentGuardianPlugin::make()
+    ->cluster(\App\Filament\Clusters\Settings::class)
+```
+
+Closures are supported:
+
+```php
+FilamentGuardianPlugin::make()
+    ->cluster(fn () => auth()->user()->isAdmin()
+        ? \App\Filament\Clusters\Settings::class
+        : null
+    )
+```
+
+Or via config:
+
+```php
+// config/filament-guardian.php
+'role_resource' => [
+    'navigation' => [
+        'cluster' => \App\Filament\Clusters\Settings::class,
+    ],
+],
+```
+
+Defaults to `null` (no cluster).
 
 ### Resource Labels & Slug
 

@@ -37,6 +37,8 @@ class FilamentGuardianPlugin implements Plugin
     {
         $this->panel = $panel;
 
+        $this->syncClusterToConfig();
+
         if (! $this->panelHasRoleResource($panel)) {
             $panel->resources([
                 RoleResource::class,
@@ -52,6 +54,22 @@ class FilamentGuardianPlugin implements Plugin
                 SetPermissionsTeam::class,
             ], isPersistent: true);
         }
+    }
+
+    /**
+     * Temporarily sync the cluster value to config so Filament's
+     * registerToCluster() can resolve it during $panel->resources().
+     * This runs sequentially per panel, so multi-panel is safe.
+     */
+    protected function syncClusterToConfig(): void
+    {
+        $cluster = $this->cluster !== null
+            ? $this->evaluate($this->cluster)
+            : null;
+
+        config([
+            'filament-guardian.role_resource.navigation.cluster' => $cluster,
+        ]);
     }
 
     protected function panelHasRoleResource(Panel $panel): bool

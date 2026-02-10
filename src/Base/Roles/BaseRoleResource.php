@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian\Base\Roles;
 
 use BackedEnum;
+use Closure;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Filament\Resources\Resource;
@@ -24,6 +25,8 @@ use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 abstract class BaseRoleResource extends Resource
 {
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-shield-check';
+
+    protected static ?Panel $registrationPanel = null;
 
     /**
      * @return class-string<Model>
@@ -56,17 +59,17 @@ abstract class BaseRoleResource extends Resource
 
     public static function getModelLabel(): string
     {
-        return static::plugin()->getModelLabel() ?? parent::getModelLabel();
+        return static::plugin()?->getModelLabel() ?? parent::getModelLabel();
     }
 
     public static function getPluralModelLabel(): string
     {
-        return static::plugin()->getPluralModelLabel() ?? parent::getPluralModelLabel();
+        return static::plugin()?->getPluralModelLabel() ?? parent::getPluralModelLabel();
     }
 
     public static function getSlug(?Panel $panel = null): string
     {
-        return static::plugin()->getSlug() ?? parent::getSlug($panel);
+        return static::plugin()?->getSlug() ?? parent::getSlug($panel);
     }
 
     public static function form(Schema $schema): Schema
@@ -94,34 +97,55 @@ abstract class BaseRoleResource extends Resource
         ];
     }
 
+    public static function registerRoutes(Panel $panel, ?Closure $registerPageRoutes = null): void
+    {
+        static::$registrationPanel = $panel;
+
+        try {
+            parent::registerRoutes($panel, $registerPageRoutes);
+        } finally {
+            static::$registrationPanel = null;
+        }
+    }
+
+    /**
+     * @return class-string<\Filament\Clusters\Cluster>|null
+     */
+    public static function getCluster(): ?string
+    {
+        /** @var class-string<\Filament\Clusters\Cluster>|null */
+        return static::plugin()?->getCluster()
+            ?? config('filament-guardian.role_resource.navigation.cluster');
+    }
+
     public static function getNavigationIcon(): string | BackedEnum | Htmlable | null
     {
-        return static::plugin()->getNavigationIcon() ?? parent::getNavigationIcon();
+        return static::plugin()?->getNavigationIcon() ?? parent::getNavigationIcon();
     }
 
     public static function getActiveNavigationIcon(): string | BackedEnum | Htmlable | null
     {
-        return static::plugin()->getActiveNavigationIcon() ?? parent::getActiveNavigationIcon();
+        return static::plugin()?->getActiveNavigationIcon() ?? parent::getActiveNavigationIcon();
     }
 
     public static function getNavigationLabel(): string
     {
-        return static::plugin()->getNavigationLabel() ?? parent::getNavigationLabel();
+        return static::plugin()?->getNavigationLabel() ?? parent::getNavigationLabel();
     }
 
     public static function getNavigationGroup(): string | UnitEnum | null
     {
-        return static::plugin()->getNavigationGroup() ?? parent::getNavigationGroup();
+        return static::plugin()?->getNavigationGroup() ?? parent::getNavigationGroup();
     }
 
     public static function getNavigationSort(): ?int
     {
-        return static::plugin()->getNavigationSort() ?? parent::getNavigationSort();
+        return static::plugin()?->getNavigationSort() ?? parent::getNavigationSort();
     }
 
     public static function getNavigationBadge(): ?string
     {
-        return static::plugin()->getNavigationBadge() ?? parent::getNavigationBadge();
+        return static::plugin()?->getNavigationBadge() ?? parent::getNavigationBadge();
     }
 
     /**
@@ -129,21 +153,30 @@ abstract class BaseRoleResource extends Resource
      */
     public static function getNavigationBadgeColor(): string | array | null
     {
-        return static::plugin()->getNavigationBadgeColor() ?? parent::getNavigationBadgeColor();
+        return static::plugin()?->getNavigationBadgeColor() ?? parent::getNavigationBadgeColor();
     }
 
     public static function getNavigationParentItem(): ?string
     {
-        return static::plugin()->getNavigationParentItem() ?? parent::getNavigationParentItem();
+        return static::plugin()?->getNavigationParentItem() ?? parent::getNavigationParentItem();
     }
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::plugin()->shouldRegisterNavigation();
+        return static::plugin()?->shouldRegisterNavigation() ?? parent::shouldRegisterNavigation();
     }
 
-    protected static function plugin(): FilamentGuardianPlugin
+    protected static function plugin(): ?FilamentGuardianPlugin
     {
-        return FilamentGuardianPlugin::get();
+        $panel = filament()->getCurrentPanel() ?? static::$registrationPanel;
+
+        if (! $panel?->hasPlugin('filament-guardian')) {
+            return null;
+        }
+
+        /** @var FilamentGuardianPlugin $plugin */
+        $plugin = $panel->getPlugin('filament-guardian');
+
+        return $plugin;
     }
 }

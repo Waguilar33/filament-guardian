@@ -199,6 +199,7 @@ return [
         */
 
         'navigation' => [
+            'cluster' => null,      // e.g., \App\Filament\Clusters\Settings::class
             'icon' => null,         // e.g., 'heroicon-o-shield-check' or Heroicon::OutlinedShieldCheck
             'active_icon' => null,  // Icon shown when navigation item is active
             'label' => null,        // Navigation label (defaults to plural model label)
