@@ -425,48 +425,95 @@ All configurable values follow this priority:
 
 ### guardian:sync
 
-Sync permissions to the database for all panels:
+Syncs permissions to the database based on your Filament resources, pages, widgets, and custom permissions defined in config.
+
+**This command should be part of your deployment process**, typically run after migrations. It ensures all permissions exist in the database for your current codebase - new resources get their permissions created, and existing permissions remain untouched.
 
 ```bash
+# Run after migrations in your deployment script
+php artisan migrate
 php artisan guardian:sync
+```
 
+```bash
 # Sync specific panels only
 php artisan guardian:sync --panel=admin --panel=app
 
-# Verbose output
+# Verbose output to see each permission being created
 php artisan guardian:sync -v
 ```
 
-Creates permissions for resources, pages, widgets, and custom permissions.
+**What it creates:**
+
+| Type | Permissions Created |
+|------|---------------------|
+| Resources | `ViewAny:User`, `Create:User`, `Update:User`, `Delete:User`, etc. |
+| Pages | `Access:Dashboard`, `Access:Settings`, etc. |
+| Widgets | `View:StatsOverview`, `View:RevenueChart`, etc. |
+| Custom | Whatever you define in `config/filament-guardian.php` |
+
+**Example deployment script:**
+
+```bash
+php artisan down
+php artisan migrate --force
+php artisan guardian:sync
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan up
+```
 
 ### guardian:policies
 
-Generate Laravel policies for Filament resources:
+Generates Laravel policy classes for your Filament resources. Policies authorize actions based on the permissions synced by `guardian:sync`.
+
+**Run this during development** when you add new resources or need to regenerate policies.
 
 ```bash
-# Interactive mode
+# Interactive mode - prompts for panel and resources
 php artisan guardian:policies
 
 # Generate for all resources in a panel
 php artisan guardian:policies --panel=admin --all-resources
 
-# Generate for all panels
+# Generate for all panels at once
 php artisan guardian:policies --all-panels
 
-# Regenerate existing policies
+# Regenerate existing policies (overwrites)
 php artisan guardian:policies --panel=admin --all-resources --force
+```
+
+**Generated policy example:**
+
+```php
+// app/Policies/UserPolicy.php
+public function viewAny(User $user): bool
+{
+    return $user->can('ViewAny:User');
+}
+
+public function update(User $user, User $model): bool
+{
+    return $user->can('Update:User');
+}
 ```
 
 ### guardian:create-user
 
-Create a new user (useful for first deployment when no users exist):
+Creates a user account. **Essential for first deployment** when your database has no users and you need an initial admin account to access the panel.
 
 ```bash
+# Interactive mode - prompts for name, email, password
 php artisan guardian:create-user
+
+# Non-interactive (useful for CI/CD or scripts)
 php artisan guardian:create-user --name="Admin" --email="admin@example.com" --password="secret"
 ```
 
-To customize user creation (e.g., set additional fields), register a callback in your `AppServiceProvider`:
+**Customizing user creation:**
+
+If your User model has additional required fields (e.g., `is_super_admin`, `tenant_id`), register a callback in your `AppServiceProvider`:
 
 ```php
 use Waguilar\FilamentGuardian\Facades\Guardian;
@@ -479,20 +526,41 @@ public function boot(): void
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'is_super_admin' => true,
+            'is_super_admin' => true, // custom field
         ]);
     });
 }
 ```
 
-### guardian:super-admin
-
-Create the super-admin role for non-tenant panels:
+**First deployment example:**
 
 ```bash
+php artisan migrate
+php artisan guardian:sync
+php artisan guardian:create-user --name="Admin" --email="admin@example.com" --password="changeme"
+php artisan guardian:super-admin --panel=admin --email="admin@example.com"
+```
+
+### guardian:super-admin
+
+Creates the super-admin role and optionally assigns it to a user. **Required for non-tenant panels** where you want a user to bypass all permission checks.
+
+For tenant panels, the super-admin role is automatically created when tenants are created.
+
+```bash
+# Create the super-admin role for a panel
 php artisan guardian:super-admin --panel=admin
+
+# Create role AND assign to existing user
 php artisan guardian:super-admin --panel=admin --email=admin@example.com
 ```
+
+**When to use:**
+
+| Panel Type | Super-Admin Role Creation |
+|------------|---------------------------|
+| Non-tenant | Run this command manually |
+| Tenant | Automatic when tenant is created |
 
 ## Publishing
 

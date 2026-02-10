@@ -126,7 +126,7 @@ final class PermissionResolver
         /** @var Collection<int, string> $permissions */
         $permissions = Permission::query()
             ->whereRaw('guard_name = ?', [$this->guard])
-            ->pluck('name'); // @phpstan-ignore argument.type
+            ->pluck('name');
 
         $this->allPermissions = $permissions;
 
