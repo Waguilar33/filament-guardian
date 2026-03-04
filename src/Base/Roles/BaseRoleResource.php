@@ -9,6 +9,7 @@ use Closure;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Filament\Resources\Resource;
+use Filament\Resources\ResourceConfiguration;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
@@ -97,12 +98,12 @@ abstract class BaseRoleResource extends Resource
         ];
     }
 
-    public static function registerRoutes(Panel $panel, ?Closure $registerPageRoutes = null): void
+    public static function registerRoutes(Panel $panel, ?Closure $registerPageRoutes = null, ?ResourceConfiguration $configuration = null): void
     {
         static::$registrationPanel = $panel;
 
         try {
-            parent::registerRoutes($panel, $registerPageRoutes);
+            parent::registerRoutes($panel, $registerPageRoutes, $configuration);
         } finally {
             static::$registrationPanel = null;
         }
