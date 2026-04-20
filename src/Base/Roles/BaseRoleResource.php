@@ -6,6 +6,7 @@ namespace Waguilar\FilamentGuardian\Base\Roles;
 
 use BackedEnum;
 use Closure;
+use Filament\Clusters\Cluster;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Filament\Resources\Resource;
@@ -25,7 +26,7 @@ use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 
 abstract class BaseRoleResource extends Resource
 {
-    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-shield-check';
+    protected static string | BackedEnum | null $navigationIcon = null;
 
     protected static ?Panel $registrationPanel = null;
 
@@ -60,16 +61,20 @@ abstract class BaseRoleResource extends Resource
 
     public static function getModelLabel(): string
     {
-        return static::plugin()?->getModelLabel() ?? parent::getModelLabel();
+        return static::$modelLabel ?? static::plugin()?->getModelLabel() ?? parent::getModelLabel();
     }
 
     public static function getPluralModelLabel(): string
     {
-        return static::plugin()?->getPluralModelLabel() ?? parent::getPluralModelLabel();
+        return static::$pluralModelLabel ?? static::plugin()?->getPluralModelLabel() ?? parent::getPluralModelLabel();
     }
 
     public static function getSlug(?Panel $panel = null): string
     {
+        if (filled(static::$slug)) {
+            return static::$slug;
+        }
+
         return static::plugin()?->getSlug() ?? parent::getSlug($panel);
     }
 
@@ -110,43 +115,51 @@ abstract class BaseRoleResource extends Resource
     }
 
     /**
-     * @return class-string<\Filament\Clusters\Cluster>|null
+     * @return class-string<Cluster>|null
      */
     public static function getCluster(): ?string
     {
-        /** @var class-string<\Filament\Clusters\Cluster>|null */
-        return static::plugin()?->getCluster()
+        /** @var class-string<Cluster>|null */
+        return parent::getCluster()
+            ?? static::plugin()?->getCluster()
             ?? config('filament-guardian.role_resource.navigation.cluster');
     }
 
     public static function getNavigationIcon(): string | BackedEnum | Htmlable | null
     {
-        return static::plugin()?->getNavigationIcon() ?? parent::getNavigationIcon();
+        return parent::getNavigationIcon()
+            ?? static::plugin()?->getNavigationIcon()
+            ?? 'heroicon-o-shield-check';
     }
 
     public static function getActiveNavigationIcon(): string | BackedEnum | Htmlable | null
     {
-        return static::plugin()?->getActiveNavigationIcon() ?? parent::getActiveNavigationIcon();
+        if (static::$activeNavigationIcon !== null) {
+            return static::$activeNavigationIcon;
+        }
+
+        return static::plugin()?->getActiveNavigationIcon()
+            ?? static::getNavigationIcon();
     }
 
     public static function getNavigationLabel(): string
     {
-        return static::plugin()?->getNavigationLabel() ?? parent::getNavigationLabel();
+        return static::$navigationLabel ?? static::plugin()?->getNavigationLabel() ?? parent::getNavigationLabel();
     }
 
     public static function getNavigationGroup(): string | UnitEnum | null
     {
-        return static::plugin()?->getNavigationGroup() ?? parent::getNavigationGroup();
+        return parent::getNavigationGroup() ?? static::plugin()?->getNavigationGroup();
     }
 
     public static function getNavigationSort(): ?int
     {
-        return static::plugin()?->getNavigationSort() ?? parent::getNavigationSort();
+        return parent::getNavigationSort() ?? static::plugin()?->getNavigationSort();
     }
 
     public static function getNavigationBadge(): ?string
     {
-        return static::plugin()?->getNavigationBadge() ?? parent::getNavigationBadge();
+        return parent::getNavigationBadge() ?? static::plugin()?->getNavigationBadge();
     }
 
     /**
@@ -154,12 +167,12 @@ abstract class BaseRoleResource extends Resource
      */
     public static function getNavigationBadgeColor(): string | array | null
     {
-        return static::plugin()?->getNavigationBadgeColor() ?? parent::getNavigationBadgeColor();
+        return parent::getNavigationBadgeColor() ?? static::plugin()?->getNavigationBadgeColor();
     }
 
     public static function getNavigationParentItem(): ?string
     {
-        return static::plugin()?->getNavigationParentItem() ?? parent::getNavigationParentItem();
+        return parent::getNavigationParentItem() ?? static::plugin()?->getNavigationParentItem();
     }
 
     public static function shouldRegisterNavigation(): bool

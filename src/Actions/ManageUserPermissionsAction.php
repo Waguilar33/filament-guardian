@@ -34,6 +34,14 @@ final class ManageUserPermissionsAction
             ->slideOver()
             ->modalWidth('4xl')
             ->modalHeading(__('filament-guardian::filament-guardian.users.permissions.modal_heading'))
+            ->modalDescription(function (Model $record): string {
+                /** @var string|null $name */
+                $name = $record->getAttribute('name');
+                /** @var string|null $email */
+                $email = $record->getAttribute('email');
+
+                return collect([$name, $email])->filter()->implode(' · ');
+            })
             ->fillForm(fn (Model $record): array => self::buildFormData($record))
             ->schema(fn (Model $record): array => self::buildSchema($record))
             ->action(function (array $data, Model $record): void {

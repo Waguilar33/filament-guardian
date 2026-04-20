@@ -1,0 +1,103 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * This migration is only required when you have multiple panels in a single
+ * Laravel application where some panels use multi-tenancy and others do not.
+ *
+ * When Spatie's teams feature is enabled, the team_foreign_key column is added
+ * as NOT NULL on the model_has_permissions and model_has_roles pivot tables.
+ * This works fine when every panel has a tenant, but breaks when a non-tenant
+ * panel tries to insert roles with no tenant — since all panels share the same
+ * database, those records need tenant_id to be NULL.
+ *
+ * This migration makes the column nullable and restructures the primary key on
+ * both pivot tables so records with NULL tenant_id can coexist alongside records
+ * with a tenant_id, without violating database constraints.
+ *
+ * If you are using UUID primary keys instead of Spatie's default integer IDs,
+ * replace `->unsignedBigInteger()` with `->uuid()` in the change() calls below.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $tableNames = config('permission.table_names');
+        $columnNames = config('permission.column_names');
+        $teamForeignKey = $columnNames['team_foreign_key'];
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
+        $pivotRole = $columnNames['role_pivot_key'] ?? 'role_id';
+        $modelMorphKey = $columnNames['model_morph_key'];
+
+        Schema::table($tableNames['model_has_permissions'], function (Blueprint $table) use ($teamForeignKey, $pivotPermission, $modelMorphKey) {
+            $table->dropPrimary('model_has_permissions_permission_model_type_primary');
+
+            // Replace ->uuid() here if you are using UUID primary keys
+            $table->unsignedBigInteger($teamForeignKey)->nullable()->change();
+
+            $table->primary(
+                [$pivotPermission, $modelMorphKey, 'model_type'],
+                'model_has_permissions_permission_model_type_primary'
+            );
+
+            $table->unique(
+                [$teamForeignKey, $pivotPermission, $modelMorphKey, 'model_type'],
+                'model_has_permissions_team_unique'
+            );
+        });
+
+        Schema::table($tableNames['model_has_roles'], function (Blueprint $table) use ($teamForeignKey, $pivotRole, $modelMorphKey) {
+            $table->dropPrimary('model_has_roles_role_model_type_primary');
+
+            // Replace ->uuid() here if you are using UUID primary keys
+            $table->unsignedBigInteger($teamForeignKey)->nullable()->change();
+
+            $table->primary(
+                [$pivotRole, $modelMorphKey, 'model_type'],
+                'model_has_roles_role_model_type_primary'
+            );
+
+            $table->unique(
+                [$teamForeignKey, $pivotRole, $modelMorphKey, 'model_type'],
+                'model_has_roles_team_unique'
+            );
+        });
+    }
+
+    public function down(): void
+    {
+        $tableNames = config('permission.table_names');
+        $columnNames = config('permission.column_names');
+        $teamForeignKey = $columnNames['team_foreign_key'];
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
+        $pivotRole = $columnNames['role_pivot_key'] ?? 'role_id';
+        $modelMorphKey = $columnNames['model_morph_key'];
+
+        Schema::table($tableNames['model_has_permissions'], function (Blueprint $table) use ($teamForeignKey, $pivotPermission, $modelMorphKey) {
+            $table->dropUnique('model_has_permissions_team_unique');
+            $table->dropPrimary('model_has_permissions_permission_model_type_primary');
+
+            $table->unsignedBigInteger($teamForeignKey)->nullable(false)->change();
+
+            $table->primary(
+                [$teamForeignKey, $pivotPermission, $modelMorphKey, 'model_type'],
+                'model_has_permissions_permission_model_type_primary'
+            );
+        });
+
+        Schema::table($tableNames['model_has_roles'], function (Blueprint $table) use ($teamForeignKey, $pivotRole, $modelMorphKey) {
+            $table->dropUnique('model_has_roles_team_unique');
+            $table->dropPrimary('model_has_roles_role_model_type_primary');
+
+            $table->unsignedBigInteger($teamForeignKey)->nullable(false)->change();
+
+            $table->primary(
+                [$teamForeignKey, $pivotRole, $modelMorphKey, 'model_type'],
+                'model_has_roles_role_model_type_primary'
+            );
+        });
+    }
+};

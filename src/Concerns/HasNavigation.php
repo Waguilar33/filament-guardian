@@ -6,6 +6,7 @@ namespace Waguilar\FilamentGuardian\Concerns;
 
 use BackedEnum;
 use Closure;
+use Filament\Clusters\Cluster;
 use Filament\Support\Concerns\EvaluatesClosures;
 
 trait HasNavigation
@@ -247,18 +248,18 @@ trait HasNavigation
     }
 
     /**
-     * @return class-string<\Filament\Clusters\Cluster>|null
+     * @return class-string<Cluster>|null
      */
     public function getCluster(): ?string
     {
         if ($this->cluster !== null) {
-            /** @var class-string<\Filament\Clusters\Cluster>|null $result */
+            /** @var class-string<Cluster>|null $result */
             $result = $this->evaluate($this->cluster);
 
             return $result;
         }
 
-        /** @var class-string<\Filament\Clusters\Cluster>|null $configValue */
+        /** @var class-string<Cluster>|null $configValue */
         $configValue = config('filament-guardian.role_resource.navigation.cluster');
 
         return $configValue;

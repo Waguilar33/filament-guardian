@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 use Waguilar\FilamentGuardian\Facades\Guardian;
 
 use function Laravel\Prompts\password;
@@ -36,7 +37,7 @@ class CreateUserCommand extends Command
 
         try {
             Guardian::createUser($userModel, $userData);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->components->error('Failed to create user: ' . $e->getMessage());
 
             return self::FAILURE;

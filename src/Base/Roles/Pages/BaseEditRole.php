@@ -11,25 +11,17 @@ use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use RuntimeException;
 use Spatie\Permission\Contracts\Role;
-use Waguilar\FilamentGuardian\Concerns\ExtractsPermissions;
+use Waguilar\FilamentGuardian\Concerns\SyncsPermissions;
 use Waguilar\FilamentGuardian\Facades\Guardian;
 use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 use Waguilar\FilamentGuardian\Support\PermissionResolver;
 
 abstract class BaseEditRole extends EditRecord
 {
-    use ExtractsPermissions;
-
-    /**
-     * Permissions extracted from form data to sync after save.
-     *
-     * @var Collection<int, string>
-     */
-    protected Collection $permissionsToSync;
+    use SyncsPermissions;
 
     public function mount(int | string $record): void
     {
@@ -130,32 +122,16 @@ abstract class BaseEditRole extends EditRecord
     }
 
     /**
-     * Extract permissions from form data before saving the role.
-     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $this->permissionsToSync = $this->extractPermissions($data);
-
-        /** @var array<string, mixed> $result */
-        $result = Arr::only($data, ['name']);
-
-        return $result;
+        return $this->capturePermissionsFromFormData($data);
     }
 
-    /**
-     * Sync permissions after the role is saved.
-     *
-     * @override Filament lifecycle hook
-     */
     protected function afterSave(): void
     {
-        $record = $this->record;
-
-        if ($record instanceof Role) {
-            $record->syncPermissions($this->permissionsToSync->all());
-        }
+        $this->syncCapturedPermissions();
     }
 }

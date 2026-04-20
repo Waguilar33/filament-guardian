@@ -118,6 +118,10 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                     $file->getRealPath() => base_path("stubs/filament-guardian/{$file->getFilename()}"),
                 ], 'filament-guardian-stubs');
             }
+
+            $this->publishes([
+                __DIR__ . '/../database/migrations/make_spatie_team_column_nullable.php.stub' => database_path('migrations/' . date('Y_m_d_His') . '_make_spatie_team_column_nullable.php'),
+            ], 'filament-guardian-multitenancy');
         }
 
         Testable::mixin(new TestsFilamentGuardian);
@@ -156,6 +160,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                 return;
             }
 
+            // Must check the original name — $role->name is already the new value at this point.
             $originalName = $role->getOriginal('name');
             if ($originalName === Guardian::getSuperAdminRoleName()) {
                 throw new SuperAdminProtectedException(
@@ -165,11 +170,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         });
 
         $roleClass::deleting(function (Role $role): void {
-            if (! Guardian::isSuperAdminEnabled()) {
-                return;
-            }
-
-            if ($role->name === Guardian::getSuperAdminRoleName()) {
+            if (Guardian::isSuperAdminRole($role)) {
                 throw new SuperAdminProtectedException(
                     __('filament-guardian::filament-guardian.super_admin.cannot_delete')
                 );

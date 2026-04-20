@@ -115,7 +115,7 @@ class PublishRoleResourceCommand extends Command
         ];
 
         foreach ($stubs as $stub => $output) {
-            $contents = $this->filesystem->get($stubsDirectory . '/' . $stub);
+            $contents = (string) $this->filesystem->get($stubsDirectory . '/' . $stub);
 
             $contents = str_replace('{{ namespace }}', $namespace, $contents);
 

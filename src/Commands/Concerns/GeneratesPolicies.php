@@ -81,7 +81,7 @@ trait GeneratesPolicies
 
         if (str_starts_with($path, $appPath)) {
             $relativePath = mb_substr($path, mb_strlen($appPath));
-            $relativePath = mb_ltrim($relativePath, DIRECTORY_SEPARATOR);
+            $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR);
 
             return 'App\\' . str_replace(DIRECTORY_SEPARATOR, '\\', $relativePath);
         }

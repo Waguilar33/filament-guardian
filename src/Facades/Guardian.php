@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Spatie\Permission\Contracts\Role as RoleContract;
 use Spatie\Permission\Models\Role;
+use Waguilar\FilamentGuardian\FilamentGuardian;
 
 /**
  * @method static Closure uniqueRoleValidation()
@@ -19,13 +20,15 @@ use Spatie\Permission\Models\Role;
  * @method static bool isSuperAdminRole(RoleContract $role)
  * @method static bool userIsSuperAdmin(mixed $user)
  * @method static Role createSuperAdminRole(?string $panelId = null)
- * @method static Role createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null)
+ * @method static Role createSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null)
+ * @method static Role|null getSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null)
  * @method static Role|null getSuperAdminRole(?string $panelId = null)
  * @method static void assignSuperAdminTo(Authenticatable $user, ?string $panelId = null)
+ * @method static void assignSuperAdminToForTenant(Authenticatable $user, ?Model $tenant = null, ?string $guard = null, ?string $panelId = null)
  * @method static void createUserUsing(Closure $callback)
- * @method static Model createUser(string $userModel, array{name: string, email: string, password: string} $data)
+ * @method static Model createUser(string $userModel, array<string, mixed> $data)
  *
- * @see \Waguilar\FilamentGuardian\FilamentGuardian
+ * @see FilamentGuardian
  */
 class Guardian extends Facade
 {

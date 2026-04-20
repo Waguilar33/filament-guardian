@@ -1,6 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use Filament\Pages\Dashboard;
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
+use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
 
 return [
 
@@ -39,7 +43,7 @@ return [
     */
 
     'permission_key' => [
-        'builder' => Waguilar\FilamentGuardian\Support\PermissionKeyBuilder::class,
+        'builder' => PermissionKeyBuilder::class,
         'separator' => ':',
         'case' => 'pascal',
     ],
@@ -117,7 +121,7 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
-            Filament\Pages\Dashboard::class,
+            Dashboard::class,
         ],
     ],
 
@@ -135,8 +139,8 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
-            Filament\Widgets\AccountWidget::class,
-            Filament\Widgets\FilamentInfoWidget::class,
+            AccountWidget::class,
+            FilamentInfoWidget::class,
         ],
     ],
 

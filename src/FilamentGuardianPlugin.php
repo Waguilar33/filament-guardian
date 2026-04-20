@@ -145,14 +145,8 @@ class FilamentGuardianPlugin implements Plugin
 
     public function isSuperAdminEnabled(): bool
     {
-        if ($this->superAdminEnabled !== null) {
-            return $this->superAdminEnabled;
-        }
-
-        /** @var bool $enabled */
-        $enabled = config('filament-guardian.super_admin.enabled', false);
-
-        return $enabled;
+        /** @var bool */
+        return $this->superAdminEnabled ?? config('filament-guardian.super_admin.enabled', FilamentGuardian::DEFAULT_SUPER_ADMIN_ENABLED);
     }
 
     /** @api */
@@ -165,14 +159,8 @@ class FilamentGuardianPlugin implements Plugin
 
     public function getSuperAdminRoleName(): string
     {
-        if ($this->superAdminRoleName !== null) {
-            return $this->superAdminRoleName;
-        }
-
-        /** @var string $name */
-        $name = config('filament-guardian.super_admin.role_name', 'Super Admin');
-
-        return $name;
+        /** @var string */
+        return $this->superAdminRoleName ?? config('filament-guardian.super_admin.role_name', FilamentGuardian::DEFAULT_SUPER_ADMIN_ROLE_NAME);
     }
 
     /** @api */
@@ -185,13 +173,7 @@ class FilamentGuardianPlugin implements Plugin
 
     public function getSuperAdminIntercept(): string
     {
-        if ($this->superAdminIntercept !== null) {
-            return $this->superAdminIntercept;
-        }
-
-        /** @var string $mode */
-        $mode = config('filament-guardian.super_admin.intercept', 'before');
-
-        return $mode;
+        /** @var string */
+        return $this->superAdminIntercept ?? config('filament-guardian.super_admin.intercept', FilamentGuardian::DEFAULT_SUPER_ADMIN_INTERCEPT);
     }
 }

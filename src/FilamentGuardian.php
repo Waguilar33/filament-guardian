@@ -7,7 +7,9 @@ namespace Waguilar\FilamentGuardian;
 use Closure;
 use Exception;
 use Filament\Facades\Filament;
+use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Unique;
@@ -19,14 +21,40 @@ use Spatie\Permission\Traits\HasRoles;
 
 class FilamentGuardian
 {
+    public const DEFAULT_SUPER_ADMIN_ENABLED = false;
+
+    public const DEFAULT_SUPER_ADMIN_ROLE_NAME = 'Super Admin';
+
+    public const DEFAULT_SUPER_ADMIN_INTERCEPT = 'before';
+
     /** @var (Closure(class-string<Model>, array{name: string, email: string, password: string}): Model)|null */
     protected ?Closure $createUserCallback = null;
 
-    protected function resolvePluginForPanel(?string $panelId): ?FilamentGuardianPlugin
+    protected function resolvePanel(?string $panelId): ?Panel
     {
-        $panel = $panelId !== null
+        return $panelId !== null
             ? Filament::getPanel($panelId)
             : Filament::getCurrentPanel();
+    }
+
+    protected function resolvePluginForPanel(?string $panelId): ?FilamentGuardianPlugin
+    {
+        $panel = $this->resolvePanel($panelId);
+
+        if ($panel === null && $panelId === null) {
+            foreach (Filament::getPanels() as $candidate) {
+                try {
+                    $plugin = $candidate->getPlugin('filament-guardian');
+                    if ($plugin instanceof FilamentGuardianPlugin) {
+                        return $plugin;
+                    }
+                } catch (Exception) {
+                    continue;
+                }
+            }
+
+            return null;
+        }
 
         if ($panel === null) {
             return null;
@@ -39,6 +67,69 @@ class FilamentGuardian
         } catch (Exception) {
             return null;
         }
+    }
+
+    private function userUsesHasRolesTrait(mixed $user): bool
+    {
+        if (! is_object($user) && ! is_string($user)) {
+            return false;
+        }
+
+        return in_array(HasRoles::class, class_uses_recursive($user), true);
+    }
+
+    /**
+     * @param  int|string|null  $tenantId  Scopes to this tenant. Null uses Spatie team tracking when teams are enabled.
+     * @return Builder<Role>
+     */
+    private function buildSuperAdminRoleQuery(string $guard, ?string $panelId, int | string | null $tenantId = null): Builder
+    {
+        $registrar = app(PermissionRegistrar::class);
+
+        /** @var class-string<Role> $roleClass */
+        $roleClass = $registrar->getRoleClass();
+
+        $query = $roleClass::query()
+            ->whereRaw('name = ?', [$this->getSuperAdminRoleName($panelId)])
+            ->whereRaw('guard_name = ?', [$guard]);
+
+        if ($tenantId !== null) {
+            /** @var string $teamKey */
+            $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
+            $query->where($teamKey, $tenantId);
+        } elseif ($registrar->teams) {
+            /** @var string $teamKey */
+            $teamKey = $registrar->teamsKey;
+            $query->where($teamKey, getPermissionsTeamId());
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  int|string|null  $tenantId  Scopes to this tenant. Null uses Spatie team tracking when teams are enabled.
+     * @return array<string, mixed>
+     */
+    private function buildSuperAdminRoleAttributes(string $guard, ?string $panelId, int | string | null $tenantId = null): array
+    {
+        $registrar = app(PermissionRegistrar::class);
+
+        $attributes = [
+            'name' => $this->getSuperAdminRoleName($panelId),
+            'guard_name' => $guard,
+        ];
+
+        if ($tenantId !== null) {
+            /** @var string $teamKey */
+            $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
+            $attributes[$teamKey] = $tenantId;
+        } elseif ($registrar->teams) {
+            /** @var string $teamKey */
+            $teamKey = $registrar->teamsKey;
+            $attributes[$teamKey] = getPermissionsTeamId();
+        }
+
+        return $attributes;
     }
 
     /**
@@ -64,44 +155,23 @@ class FilamentGuardian
 
     public function isSuperAdminEnabled(?string $panelId = null): bool
     {
-        $plugin = $this->resolvePluginForPanel($panelId);
-
-        if ($plugin !== null) {
-            return $plugin->isSuperAdminEnabled();
-        }
-
-        /** @var bool $enabled */
-        $enabled = config('filament-guardian.super_admin.enabled', false);
-
-        return $enabled;
+        /** @var bool */
+        return $this->resolvePluginForPanel($panelId)?->isSuperAdminEnabled()
+            ?? config('filament-guardian.super_admin.enabled', self::DEFAULT_SUPER_ADMIN_ENABLED);
     }
 
     public function getSuperAdminRoleName(?string $panelId = null): string
     {
-        $plugin = $this->resolvePluginForPanel($panelId);
-
-        if ($plugin !== null) {
-            return $plugin->getSuperAdminRoleName();
-        }
-
-        /** @var string $name */
-        $name = config('filament-guardian.super_admin.role_name', 'Super Admin');
-
-        return $name;
+        /** @var string */
+        return $this->resolvePluginForPanel($panelId)?->getSuperAdminRoleName()
+            ?? config('filament-guardian.super_admin.role_name', self::DEFAULT_SUPER_ADMIN_ROLE_NAME);
     }
 
     public function getSuperAdminIntercept(?string $panelId = null): string
     {
-        $plugin = $this->resolvePluginForPanel($panelId);
-
-        if ($plugin !== null) {
-            return $plugin->getSuperAdminIntercept();
-        }
-
-        /** @var string $mode */
-        $mode = config('filament-guardian.super_admin.intercept', 'before');
-
-        return $mode;
+        /** @var string */
+        return $this->resolvePluginForPanel($panelId)?->getSuperAdminIntercept()
+            ?? config('filament-guardian.super_admin.intercept', self::DEFAULT_SUPER_ADMIN_INTERCEPT);
     }
 
     /** @api */
@@ -124,8 +194,7 @@ class FilamentGuardian
             return false;
         }
 
-        $usedTraits = class_uses_recursive($user);
-        if (! in_array(HasRoles::class, $usedTraits, true)) {
+        if (! $this->userUsesHasRolesTrait($user)) {
             return false;
         }
 
@@ -139,9 +208,7 @@ class FilamentGuardian
      */
     public function createSuperAdminRole(?string $panelId = null): Role
     {
-        $panel = $panelId !== null
-            ? Filament::getPanel($panelId)
-            : Filament::getCurrentPanel();
+        $panel = $this->resolvePanel($panelId);
 
         if ($panel !== null && $panel->hasTenancy()) {
             throw new RuntimeException(
@@ -155,47 +222,55 @@ class FilamentGuardian
         /** @var class-string<Role> $roleClass */
         $roleClass = $registrar->getRoleClass();
 
-        $attributes = [
-            'name' => $this->getSuperAdminRoleName($panelId),
-            'guard_name' => $guard,
-        ];
-
-        if ($registrar->teams) {
-            /** @var string $teamKey */
-            $teamKey = $registrar->teamsKey;
-            $attributes[$teamKey] = getPermissionsTeamId();
-        }
-
-        /** @var Role $role */
-        $role = $roleClass::query()->firstOrCreate($attributes);
-
-        return $role;
+        /** @var Role */
+        return $roleClass::query()->firstOrCreate($this->buildSuperAdminRoleAttributes($guard, $panelId));
     }
 
     /** @api */
-    public function createSuperAdminRoleForTenant(Model $tenant, string $guard, ?string $panelId = null): Role
+    public function createSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null): Role
     {
+        $panel = $this->resolvePanel($panelId);
+        $tenant ??= Filament::getTenant();
+        $guard ??= $panel?->getAuthGuard() ?? 'web';
+
+        if ($tenant === null) {
+            throw new RuntimeException('No tenant provided and no current Filament tenant is available.');
+        }
+
         $registrar = app(PermissionRegistrar::class);
 
         /** @var class-string<Role> $roleClass */
         $roleClass = $registrar->getRoleClass();
 
-        /** @var string $teamKey */
-        $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
+        /** @var int|string $tenantKey */
+        $tenantKey = $tenant->getKey();
+
+        /** @var Role */
+        return $roleClass::query()->firstOrCreate(
+            $this->buildSuperAdminRoleAttributes($guard, $panelId, $tenantKey)
+        );
+    }
+
+    /** @api */
+    public function getSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null): ?Role
+    {
+        if (! $this->isSuperAdminEnabled($panelId)) {
+            return null;
+        }
+
+        $panel = $this->resolvePanel($panelId);
+        $tenant ??= Filament::getTenant();
+        $guard ??= $panel?->getAuthGuard() ?? 'web';
+
+        if ($tenant === null) {
+            throw new RuntimeException('No tenant provided and no current Filament tenant is available.');
+        }
 
         /** @var int|string $tenantKey */
         $tenantKey = $tenant->getKey();
 
-        $attributes = [
-            'name' => $this->getSuperAdminRoleName($panelId),
-            'guard_name' => $guard,
-            $teamKey => $tenantKey,
-        ];
-
-        /** @var Role $role */
-        $role = $roleClass::query()->firstOrCreate($attributes);
-
-        return $role;
+        /** @var Role|null */
+        return $this->buildSuperAdminRoleQuery($guard, $panelId, $tenantKey)->first();
     }
 
     /**
@@ -209,36 +284,18 @@ class FilamentGuardian
             return null;
         }
 
-        $panel = $panelId !== null
-            ? Filament::getPanel($panelId)
-            : Filament::getCurrentPanel();
+        $panel = $this->resolvePanel($panelId);
 
         if ($panel !== null && $panel->hasTenancy()) {
             throw new RuntimeException(
-                "Panel '{$panel->getId()}' has tenancy enabled. Use getSuperAdminRole() within Filament context (with tenant set) instead."
+                "Panel '{$panel->getId()}' has tenancy enabled. Use getSuperAdminRoleForTenant() instead."
             );
         }
 
         $guard = $panel?->getAuthGuard() ?? 'web';
-        $registrar = app(PermissionRegistrar::class);
 
-        /** @var class-string<Role> $roleClass */
-        $roleClass = $registrar->getRoleClass();
-
-        $query = $roleClass::query()
-            ->whereRaw('name = ?', [$this->getSuperAdminRoleName($panelId)])
-            ->whereRaw('guard_name = ?', [$guard]);
-
-        if ($registrar->teams) {
-            /** @var string $teamKey */
-            $teamKey = $registrar->teamsKey;
-            $query->where($teamKey, getPermissionsTeamId());
-        }
-
-        /** @var Role|null $role */
-        $role = $query->first();
-
-        return $role;
+        /** @var Role|null */
+        return $this->buildSuperAdminRoleQuery($guard, $panelId)->first();
     }
 
     /** @api */
@@ -250,8 +307,23 @@ class FilamentGuardian
             throw new RuntimeException('Super-admin role does not exist. Ensure super-admin is enabled and the role has been created.');
         }
 
-        $usedTraits = class_uses_recursive($user);
-        if (! in_array(HasRoles::class, $usedTraits, true)) {
+        if (! $this->userUsesHasRolesTrait($user)) {
+            throw new RuntimeException('User model must use the HasRoles trait.');
+        }
+
+        ([$user, 'assignRole'])($role); // @phpstan-ignore callable.nonCallable
+    }
+
+    /** @api */
+    public function assignSuperAdminToForTenant(Authenticatable $user, ?Model $tenant = null, ?string $guard = null, ?string $panelId = null): void
+    {
+        $role = $this->getSuperAdminRoleForTenant($tenant, $guard, $panelId);
+
+        if ($role === null) {
+            throw new RuntimeException('Super-admin role does not exist. Ensure super-admin is enabled and the role has been created.');
+        }
+
+        if (! $this->userUsesHasRolesTrait($user)) {
             throw new RuntimeException('User model must use the HasRoles trait.');
         }
 
