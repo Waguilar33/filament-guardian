@@ -35,8 +35,7 @@ If you haven't already configured Spatie Laravel Permission:
 php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
 ```
 
-> [!IMPORTANT]
-> If you plan to use multi-tenancy, enable teams in `config/permission.php` **before** running the migration — this setting affects the database schema and cannot be changed after the fact.
+> **Important:** If you plan to use multi-tenancy, enable teams in `config/permission.php` **before** running the migration — this setting affects the database schema and cannot be changed after the fact.
 >
 > ```php
 > // config/permission.php
@@ -127,8 +126,7 @@ public function panel(Panel $panel): Panel
 
 With this setup, roles created in the admin panel are invisible to the app panel and vice versa. If two panels share the same guard, they share the same roles — which is sometimes intentional, but usually not what you want when the panels serve different audiences.
 
-> [!IMPORTANT]
-> Any custom guard must be registered in `config/auth.php` before it can be used. Laravel will throw an error if you reference a guard that isn't defined there.
+> **Important:** Any custom guard must be registered in `config/auth.php` before it can be used. Laravel will throw an error if you reference a guard that isn't defined there.
 >
 > ```php
 > // config/auth.php
@@ -209,11 +207,9 @@ php artisan vendor:publish --tag="filament-guardian-multitenancy"
 php artisan migrate
 ```
 
-> [!NOTE]
-> The published migration uses `unsignedBigInteger` by default, matching Spatie's default integer IDs. If your application uses UUID primary keys, open the published migration and replace `->unsignedBigInteger()` with `->uuid()` before running it.
+> **Note:** The published migration uses `unsignedBigInteger` by default, matching Spatie's default integer IDs. If your application uses UUID primary keys, open the published migration and replace `->unsignedBigInteger()` with `->uuid()` before running it.
 
-> [!IMPORTANT]
-> If you already have data in these tables, the migration is safe to run as long as your existing records don't violate the new unique constraint. On large production tables, consider running it during a maintenance window.
+> **Important:** If you already have data in these tables, the migration is safe to run as long as your existing records don't violate the new unique constraint. On large production tables, consider running it during a maintenance window.
 
 ### 3. Configure panel with tenancy
 
@@ -322,8 +318,7 @@ The super-admin concept comes from [Spatie Laravel Permission](https://spatie.be
 
 This is useful for the first user in a new panel (who needs access to everything before any roles are configured), internal admin accounts, or any user who should never be blocked by permission rules.
 
-> [!IMPORTANT]
-> The super-admin bypass only works through Laravel's Gate system — meaning `can()`, policies, and `@can()` directives. It does **not** apply to direct Spatie method calls like `->hasPermissionTo()`. If your code calls those directly, super-admin users will still need those permissions assigned explicitly. Use Gate-based checks throughout your application to get the full benefit.
+> **Important:** The super-admin bypass only works through Laravel's Gate system — meaning `can()`, policies, and `@can()` directives. It does **not** apply to direct Spatie method calls like `->hasPermissionTo()`. If your code calls those directly, super-admin users will still need those permissions assigned explicitly. Use Gate-based checks throughout your application to get the full benefit.
 
 ### 1. Global configuration
 
