@@ -751,6 +751,104 @@ Pages and widgets each get a single permission by default — typically a `view`
 
 Filament's built-in Dashboard, AccountWidget, and FilamentInfoWidget are excluded by default — they're framework-level components that most apps don't need to permission-gate.
 
+## Resource-Based Policies
+
+By default, every resource's authorization resolves through the model it's bound to — `UserResource` resolves to `UserPolicy`, `ProductResource` to `ProductPolicy`. This breaks when **two resources share the same model** but represent different workflows that need separate permissions.
+
+A common example: a `PendingOrderResource` that lists `Order` records awaiting approval. The model is `Order`, but the operations belong to an approval workflow, not general order management. If an `OrderResource` already exists, both resources resolve to the same `OrderPolicy` and any permission you generate for `PendingOrderResource` is silently superseded by the policy bound to the model.
+
+The Per-Resource Configuration above can give the two resources distinct **permission keys**, but it can't change which policy class Filament invokes. That's what this section solves.
+
+### 1. Opt in with the trait
+
+Add `HasResourcePolicy` to the resource. That's the entire setup — no extra properties, no config changes:
+
+```php
+use Filament\Resources\Resource;
+use Waguilar\FilamentGuardian\Concerns\HasResourcePolicy;
+
+class PendingOrderResource extends Resource
+{
+    use HasResourcePolicy;
+
+    protected static ?string $model = Order::class;
+}
+```
+
+Resources without the trait keep the default behaviour.
+
+### 2. How names are derived
+
+The `Resource` suffix is stripped from the resource class name, and the result drives both the permission keys and the generated policy class:
+
+| Derived | Example |
+|---------|---------|
+| Permission keys | `PendingOrderResource` → `ViewAny:PendingOrder`, `Update:PendingOrder` |
+| Policy class | `App\Policies\PendingOrderPolicy` (namespace from `policies.path`) |
+
+Two resources opting into the trait get distinct policies and permission keys, even when they share a model.
+
+### 3. Workflow
+
+After adding the trait, generate the policy and sync permissions:
+
+```bash
+php artisan guardian:policies --panel=admin
+php artisan guardian:sync
+```
+
+> **Important:** The plugin only registers the policy for resources whose policy class file already exists. If you add the trait but skip `guardian:policies`, the resource's authorization fails on the next request — by design, so missing policies surface as clear errors rather than falling back silently to the model's policy.
+
+### 4. What you need to update in your application
+
+Three places in Filament route around the resource's authorization helper. Each needs an adjustment when you opt a resource into a custom policy.
+
+#### Relation managers
+
+Declare `$relatedResource` on each relation manager owned by the resource:
+
+```php
+class OrderItemsRelationManager extends RelationManager
+{
+    protected static ?string $relatedResource = PendingOrderResource::class;
+}
+```
+
+Without it, the relation manager authorizes against the related model directly and bypasses your custom policy.
+
+#### Action authorization
+
+Actions with `->authorize('update')` (the string form) call Laravel's gate directly against the model, bypassing the resource. Use the default form or a closure instead:
+
+```php
+EditAction::make();                                  // routes through the resource
+EditAction::make()->authorize(fn ($record) =>
+    PendingOrderResource::can('update', $record));   // routes through the resource
+EditAction::make()->authorize('update');             // bypasses the resource
+```
+
+The same applies to `BulkAction`, `HeaderAction`, and table actions.
+
+#### Hand-written `$user->can(...)` calls
+
+Use the resource class — not the model — when checking against a custom-policy resource:
+
+```php
+// Collection actions (viewAny, create, deleteAny, ...)
+$user->can('viewAny', PendingOrderResource::class);
+
+// Record actions — pass the record as the second array element
+$user->can('update', [PendingOrderResource::class, $record]);
+```
+
+Generated record-action methods like `update($user, $record)` require the record argument; passing only the class string throws a `TypeError`.
+
+### 5. Out of scope
+
+**Top-level Filament Pages** use a different authorization mechanism. The trait does not apply — override `canAccess()` directly to gate them with a custom policy.
+
+**Clusters** are authorization-neutral. Placing a resource inside a cluster doesn't add or change any gate checks.
+
 ## Publishing
 
 ### 1. Config

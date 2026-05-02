@@ -124,7 +124,7 @@ class GeneratePoliciesCommand extends Command
                 continue;
             }
 
-            $policyPath = $this->getPolicyPath($resourceClass::getModel());
+            $policyPath = $this->getPolicyPath($resourceClass);
 
             if (file_exists($policyPath) && ! $this->option('force')) {
                 $this->components->twoColumnDetail("  {$resourceClass}", '<fg=yellow>Exists (use --force to overwrite)</>');

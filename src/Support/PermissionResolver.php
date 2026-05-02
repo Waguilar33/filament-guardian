@@ -377,7 +377,9 @@ final class PermissionResolver
             }
 
             /** @var class-string<resource> $resource */
-            if ($subjectType === 'class') {
+            if (ResourcePolicyDetector::usesResourcePolicy($resource)) {
+                $subject = ResourcePolicyDetector::getResourceSubject($resource);
+            } elseif ($subjectType === 'class') {
                 $subject = class_basename($resource);
             } else {
                 $subject = class_basename($resource::getModel());

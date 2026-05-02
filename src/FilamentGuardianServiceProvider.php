@@ -31,6 +31,7 @@ use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder as PermissionKeyBui
 use Waguilar\FilamentGuardian\Exceptions\SuperAdminProtectedException;
 use Waguilar\FilamentGuardian\Facades\Guardian;
 use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
+use Waguilar\FilamentGuardian\Support\ResourcePolicyDetector;
 use Waguilar\FilamentGuardian\Testing\TestsFilamentGuardian;
 
 class FilamentGuardianServiceProvider extends PackageServiceProvider
@@ -131,6 +132,26 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         $this->registerTenantObserver();
         $this->registerTenantSetListener();
         $this->registerRoleDefaults();
+        $this->registerResourcePolicies();
+    }
+
+    protected function registerResourcePolicies(): void
+    {
+        foreach (Filament::getPanels() as $panel) {
+            foreach ($panel->getResources() as $resourceClass) {
+                if (! ResourcePolicyDetector::usesResourcePolicy($resourceClass)) {
+                    continue;
+                }
+
+                $policyClass = ResourcePolicyDetector::getPolicyClass($resourceClass);
+
+                if (! class_exists($policyClass)) {
+                    continue;
+                }
+
+                Gate::policy($resourceClass, $policyClass);
+            }
+        }
     }
 
     protected function registerSuperAdminGate(): void

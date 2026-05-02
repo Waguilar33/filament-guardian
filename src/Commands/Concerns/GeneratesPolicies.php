@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder;
+use Waguilar\FilamentGuardian\Support\ResourcePolicyDetector;
 
 trait GeneratesPolicies
 {
@@ -24,7 +25,7 @@ trait GeneratesPolicies
         }
 
         $modelClass = $resourceClass::getModel();
-        $policyInfo = $this->getPolicyInfo($modelClass);
+        $policyInfo = $this->getPolicyInfo($resourceClass);
 
         $stubVariables = $this->buildStubVariables($resourceClass, $modelClass, $policyInfo);
         $stub = $this->getStubForModel($modelClass);
@@ -44,34 +45,41 @@ trait GeneratesPolicies
         return $policyInfo['path'];
     }
 
-    protected function getPolicyPath(string $modelClass): string
+    protected function getPolicyPath(string $resourceClass): string
     {
-        return $this->getPolicyInfo($modelClass)['path'];
+        return $this->getPolicyInfo($resourceClass)['path'];
     }
 
     /**
-     * Get policy path, namespace, and model name.
+     * Get policy path, namespace, and policy class name.
      *
      * Following Laravel's convention, all policies are placed directly
-     * in the configured policies directory (flat structure).
+     * in the configured policies directory (flat structure). When a resource
+     * uses HasResourcePolicy, the policy file is named after the resource
+     * (minus the "Resource" suffix); otherwise it's named after the model.
      *
-     * @return array{path: string, namespace: string, modelName: string}
+     * @return array{path: string, namespace: string, policyClassName: string}
      */
-    protected function getPolicyInfo(string $modelClass): array
+    protected function getPolicyInfo(string $resourceClass): array
     {
         /** @var string $basePath */
         $basePath = config('filament-guardian.policies.path', app_path('Policies'));
+
+        /** @var class-string<resource> $resourceClass */
+        $modelClass = $resourceClass::getModel();
 
         if (! class_exists($modelClass)) {
             throw new RuntimeException("Model class not found: {$modelClass}");
         }
 
-        $modelName = class_basename($modelClass);
+        $policyClassName = ResourcePolicyDetector::usesResourcePolicy($resourceClass)
+            ? ResourcePolicyDetector::getPolicyClassBasename($resourceClass)
+            : class_basename($modelClass) . 'Policy';
 
         return [
-            'path' => $basePath . DIRECTORY_SEPARATOR . $modelName . 'Policy.php',
+            'path' => $basePath . DIRECTORY_SEPARATOR . $policyClassName . '.php',
             'namespace' => $this->pathToNamespace($basePath),
-            'modelName' => $modelName,
+            'policyClassName' => $policyClassName,
         ];
     }
 
@@ -93,12 +101,12 @@ trait GeneratesPolicies
     }
 
     /**
-     * @param  array{path: string, namespace: string, modelName: string}  $policyInfo
+     * @param  array{path: string, namespace: string, policyClassName: string}  $policyInfo
      * @return array{namespace: string, authModelFqcn: string, authModelName: string, authModelVariable: string, modelFqcn: string, modelName: string, modelVariable: string, modelPolicy: string, methods: string}
      */
     protected function buildStubVariables(string $resourceClass, string $modelClass, array $policyInfo): array
     {
-        $modelName = $policyInfo['modelName'];
+        $modelName = class_basename($modelClass);
         $modelVariable = Str::camel($modelName);
         $authModelInfo = $this->getAuthModelInfo();
         $permissionBuilder = app(PermissionKeyBuilder::class);
@@ -123,7 +131,7 @@ trait GeneratesPolicies
             'modelFqcn' => $modelClass,
             'modelName' => $modelName,
             'modelVariable' => $modelVariable,
-            'modelPolicy' => $modelName . 'Policy',
+            'modelPolicy' => $policyInfo['policyClassName'],
             'methods' => $methodsContent,
         ];
     }
@@ -167,6 +175,10 @@ trait GeneratesPolicies
 
     protected function getPermissionSubject(string $resourceClass, string $modelClass): string
     {
+        if (ResourcePolicyDetector::usesResourcePolicy($resourceClass)) {
+            return ResourcePolicyDetector::getResourceSubject($resourceClass);
+        }
+
         $resourceConfig = $this->getManagedResourceConfig($resourceClass);
 
         if (isset($resourceConfig['subject']) && is_string($resourceConfig['subject'])) {

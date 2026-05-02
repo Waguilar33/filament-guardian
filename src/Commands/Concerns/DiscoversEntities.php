@@ -7,6 +7,7 @@ namespace Waguilar\FilamentGuardian\Commands\Concerns;
 use Filament\Panel;
 use Filament\Resources\Resource;
 use Filament\Widgets\WidgetConfiguration;
+use Waguilar\FilamentGuardian\Support\ResourcePolicyDetector;
 
 trait DiscoversEntities
 {
@@ -81,6 +82,10 @@ trait DiscoversEntities
      */
     protected function getResourceSubject(string $resourceClass): string
     {
+        if (ResourcePolicyDetector::usesResourcePolicy($resourceClass)) {
+            return ResourcePolicyDetector::getResourceSubject($resourceClass);
+        }
+
         /** @var string $subjectType */
         $subjectType = config('filament-guardian.resources.subject', 'model');
 
