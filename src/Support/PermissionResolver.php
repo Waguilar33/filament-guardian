@@ -152,7 +152,7 @@ final class PermissionResolver
     {
         /** @var array<string, string> $labels */
         $labels = array_map(
-            fn (string $resourceClass): string => $resourceClass::getPluralModelLabel(),
+            fn (string $resourceClass): string => $resourceClass::getTitleCasePluralModelLabel(),
             $this->getResourceSubjects(),
         );
 
