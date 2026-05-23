@@ -570,6 +570,9 @@ php artisan guardian:sync --panel=admin --panel=app
 
 # Verbose output to see each permission being created
 php artisan guardian:sync -v
+
+# Prune stale permissions no longer in the discovery set
+php artisan guardian:sync --prune
 ```
 
 | Type | Permissions created |
@@ -578,6 +581,14 @@ php artisan guardian:sync -v
 | Pages | `Access:Dashboard`, `Access:Settings`, etc. |
 | Widgets | `View:StatsOverview`, `View:RevenueChart`, etc. |
 | Custom | Whatever you define in `config/filament-guardian.php` |
+
+#### Pruning stale permissions
+
+By default, `guardian:sync` only creates new permissions and never deletes existing ones. Use `--prune` to remove permissions that are no longer part of the discovery set — for example, when a resource is deleted, a page is removed, or custom permissions are taken out of the config.
+
+When pruning, the command first syncs all expected permissions, then deletes any database permission for the synced guards that isn't in the expected set. Before deletion, each stale permission is detached from all roles and users to avoid orphaned pivot records.
+
+> **Warning:** Pruning is destructive. Once a permission is deleted, it cannot be recovered. Roles and users will lose assignments to pruned permissions. Use `--prune` only when you're certain the removed permissions should no longer exist.
 
 Example zero-downtime deployment:
 

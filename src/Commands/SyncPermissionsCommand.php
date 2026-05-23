@@ -20,13 +20,17 @@ class SyncPermissionsCommand extends Command
     /** @var string */
     public $signature = 'guardian:sync
         {--panel=* : Specific panel IDs to sync (syncs all if not specified)}
-        {--no-relation-managers : Skip auto-discovered relation managers}';
+        {--no-relation-managers : Skip auto-discovered relation managers}
+        {--prune : Delete permissions no longer in the discovery set}';
 
     /** @var string */
     public $description = 'Sync permissions for all Filament panels';
 
-    /** @var array<string, array{created: int, existing: int}> */
+    /** @var array<string, array{created: int, existing: int, deleted: int}> */
     protected array $stats = [];
+
+    /** @var array<string, array<int, string>> */
+    protected array $expectedPermissions = [];
 
     public function handle(): int
     {
@@ -46,6 +50,11 @@ class SyncPermissionsCommand extends Command
         }
 
         $this->syncCustomPermissions($panels);
+
+        if ($this->option('prune')) {
+            $this->pruneStalePermissions();
+        }
+
         $this->displaySummary();
 
         return self::SUCCESS;
@@ -85,7 +94,8 @@ class SyncPermissionsCommand extends Command
 
         $this->validateGuard($guard);
 
-        $this->stats[$guard] ??= ['created' => 0, 'existing' => 0];
+        $this->stats[$guard] ??= ['created' => 0, 'existing' => 0, 'deleted' => 0];
+        $this->expectedPermissions[$guard] ??= [];
 
         $this->syncResources($panel, $guard);
         $this->syncRelationManagers($panel, $guard);
@@ -111,6 +121,7 @@ class SyncPermissionsCommand extends Command
             foreach ($permissionKeys as $key) {
                 $result = $this->createPermission($key, $guard);
                 $this->recordStat($guard, $result['created']);
+                $this->expectedPermissions[$guard][] = $key;
 
                 if ($this->output->isVerbose()) {
                     $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
@@ -149,6 +160,7 @@ class SyncPermissionsCommand extends Command
             foreach ($permissionKeys as $key) {
                 $result = $this->createPermission($key, $guard);
                 $this->recordStat($guard, $result['created']);
+                $this->expectedPermissions[$guard][] = $key;
                 $totalPermissions++;
 
                 if ($this->output->isVerbose()) {
@@ -179,6 +191,7 @@ class SyncPermissionsCommand extends Command
             $key = $this->buildPagePermissionKey($prefix, $subject);
             $result = $this->createPermission($key, $guard);
             $this->recordStat($guard, $result['created']);
+            $this->expectedPermissions[$guard][] = $key;
 
             if ($this->output->isVerbose()) {
                 $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
@@ -207,6 +220,7 @@ class SyncPermissionsCommand extends Command
             $key = $this->buildWidgetPermissionKey($prefix, $subject);
             $result = $this->createPermission($key, $guard);
             $this->recordStat($guard, $result['created']);
+            $this->expectedPermissions[$guard][] = $key;
 
             if ($this->output->isVerbose()) {
                 $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
@@ -246,6 +260,7 @@ class SyncPermissionsCommand extends Command
             foreach ($guards as $guard) {
                 $result = $this->createPermission($key, $guard);
                 $this->recordStat($guard, $result['created']);
+                $this->expectedPermissions[$guard][] = $key;
 
                 if ($this->output->isVerbose()) {
                     $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
@@ -278,27 +293,58 @@ class SyncPermissionsCommand extends Command
         }
     }
 
+    protected function pruneStalePermissions(): void
+    {
+        $guards = array_keys($this->stats);
+
+        if ($guards === []) {
+            return;
+        }
+
+        $this->components->warn('Pruning stale permissions from ' . count($guards) . ' guard(s)...');
+        $this->newLine();
+
+        foreach ($guards as $guard) {
+            $expected = array_values(array_unique($this->expectedPermissions[$guard] ?? []));
+            $deleted = $this->pruneStalePermissionsForGuard($guard, $expected);
+
+            if ($deleted > 0) {
+                $this->stats[$guard]['deleted'] += $deleted;
+                $this->components->twoColumnDetail(
+                    "Guard: {$guard}",
+                    "<fg=red>{$deleted} deleted</>"
+                );
+            }
+        }
+
+        $this->newLine();
+    }
+
     protected function displaySummary(): void
     {
         $this->components->info('Summary');
 
         $totalCreated = 0;
         $totalExisting = 0;
+        $totalDeleted = 0;
 
         foreach ($this->stats as $guard => $counts) {
             $totalCreated += $counts['created'];
             $totalExisting += $counts['existing'];
+            $totalDeleted += $counts['deleted'];
 
             $this->components->twoColumnDetail(
                 "Guard: {$guard}",
-                "<fg=green>{$counts['created']} created</>, <fg=gray>{$counts['existing']} existing</>"
+                "<fg=green>{$counts['created']} created</>, <fg=gray>{$counts['existing']} existing</>" .
+                ($counts['deleted'] > 0 ? ", <fg=red>{$counts['deleted']} deleted</>" : '')
             );
         }
 
         $this->newLine();
         $this->components->twoColumnDetail(
             '<fg=bright-white>Total</>',
-            "<fg=green>{$totalCreated} created</>, <fg=gray>{$totalExisting} existing</>"
+            "<fg=green>{$totalCreated} created</>, <fg=gray>{$totalExisting} existing</>" .
+            ($totalDeleted > 0 ? ", <fg=red>{$totalDeleted} deleted</>" : '')
         );
     }
 }

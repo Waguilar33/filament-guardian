@@ -100,4 +100,35 @@ trait CreatesPermissions
     {
         return app(PermissionKeyBuilder::class);
     }
+
+    /**
+     * Delete permissions for a guard that are not in the expected set.
+     *
+     * @param  array<int, string>  $expectedKeys
+     */
+    protected function pruneStalePermissionsForGuard(string $guard, array $expectedKeys): int
+    {
+        if ($expectedKeys === []) {
+            return 0;
+        }
+
+        $permissionModel = $this->getPermissionModel();
+
+        $stalePermissions = $permissionModel::query()
+            ->whereRaw('guard_name = ?', [$guard])
+            ->whereNotIn('name', $expectedKeys)
+            ->get();
+
+        $deleted = 0;
+
+        foreach ($stalePermissions as $permission) {
+            /** @var Permission $permission */
+            $permission->roles()->detach();
+            $permission->users()->detach();
+            $permission->delete();
+            $deleted++;
+        }
+
+        return $deleted;
+    }
 }
