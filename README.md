@@ -591,6 +591,43 @@ php artisan view:cache
 php artisan up
 ```
 
+#### Pruning stale permissions
+
+By default `guardian:sync` only adds — it creates new permissions and leaves existing ones untouched. So when you remove a resource, page, widget, or custom permission, its row lingers in the database and keeps showing up on the role form. Pass `--prune` to delete whatever the sync no longer produces:
+
+```bash
+# Delete the permissions this sync no longer produces, across every panel
+php artisan guardian:sync --prune
+
+# Verbose, so you can see exactly which permissions get deleted
+php artisan guardian:sync --prune -v
+```
+
+`--prune` is **destructive and opt-in** — passing the flag is the confirmation, there's no separate prompt. Guardian owns the permission space for the panels it manages, so anything it didn't generate this run is treated as stale and removed:
+
+| A permission is pruned when… | Example |
+|------------------------------|---------|
+| You delete or rename a resource, page, or widget | `ViewAny:OldResource` |
+| You remove a key from `custom_permissions` | `export-orders` |
+| You add an entry to one of the `exclude` lists | `View:LegacyReport` |
+| You pass `--no-relation-managers` alongside `--prune` | every relation-manager permission |
+
+A pruned permission is detached from every role and user before it's deleted, so you're never left with dangling assignments — no manual cleanup needed.
+
+#### Pruning is scoped to the guard
+
+Permissions are scoped to each panel's auth guard, and `--prune` only touches the guard(s) it actually syncs. If two panels share a guard and you sync only one of them, pruning that guard would delete the other panel's permissions — so Guardian skips it with a warning instead:
+
+```bash
+# admin and support both use the "web" guard. Syncing only admin would
+# orphan support's permissions, so Guardian skips the web guard (with a warning).
+php artisan guardian:sync --panel=admin --prune
+
+# Give the run the full picture for the shared guard, and pruning is safe:
+php artisan guardian:sync --prune                       # all panels
+php artisan guardian:sync --panel=admin --panel=support --prune
+```
+
 ### 2. guardian:policies
 
 Generates Laravel policy classes for your Filament resources, wired to the permissions synced by `guardian:sync`. Run this during development when you add a new resource or need to regenerate existing policies.

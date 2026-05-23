@@ -7,6 +7,9 @@ namespace Waguilar\FilamentGuardian\Commands;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Console\Command;
+use Spatie\Permission\Contracts\Permission;
+use Spatie\Permission\Models\Permission as SpatiePermission;
+use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Waguilar\FilamentGuardian\Commands\Concerns\CreatesPermissions;
 use Waguilar\FilamentGuardian\Commands\Concerns\DiscoversEntities;
@@ -20,13 +23,21 @@ class SyncPermissionsCommand extends Command
     /** @var string */
     public $signature = 'guardian:sync
         {--panel=* : Specific panel IDs to sync (syncs all if not specified)}
-        {--no-relation-managers : Skip auto-discovered relation managers}';
+        {--no-relation-managers : Skip auto-discovered relation managers}
+        {--prune : Delete permissions for the synced guard(s) that this run did not produce (destructive)}';
 
     /** @var string */
     public $description = 'Sync permissions for all Filament panels';
 
-    /** @var array<string, array{created: int, existing: int}> */
+    /** @var array<string, array{created: int, existing: int, deleted: int}> */
     protected array $stats = [];
+
+    /**
+     * Permission names produced by this run, keyed by guard.
+     *
+     * @var array<string, array<string, true>>
+     */
+    protected array $expected = [];
 
     public function handle(): int
     {
@@ -46,6 +57,11 @@ class SyncPermissionsCommand extends Command
         }
 
         $this->syncCustomPermissions($panels);
+
+        if ($this->option('prune')) {
+            $this->prunePermissions($panels);
+        }
+
         $this->displaySummary();
 
         return self::SUCCESS;
@@ -85,7 +101,7 @@ class SyncPermissionsCommand extends Command
 
         $this->validateGuard($guard);
 
-        $this->stats[$guard] ??= ['created' => 0, 'existing' => 0];
+        $this->stats[$guard] ??= ['created' => 0, 'existing' => 0, 'deleted' => 0];
 
         $this->syncResources($panel, $guard);
         $this->syncRelationManagers($panel, $guard);
@@ -109,13 +125,7 @@ class SyncPermissionsCommand extends Command
             $permissionKeys = $this->buildResourcePermissionKeys($subject, $methods);
 
             foreach ($permissionKeys as $key) {
-                $result = $this->createPermission($key, $guard);
-                $this->recordStat($guard, $result['created']);
-
-                if ($this->output->isVerbose()) {
-                    $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
-                    $this->components->twoColumnDetail("  {$key}", $status);
-                }
+                $this->syncPermission($key, $guard);
             }
         }
 
@@ -147,14 +157,8 @@ class SyncPermissionsCommand extends Command
             $permissionKeys = $this->buildResourcePermissionKeys($subject, $methods);
 
             foreach ($permissionKeys as $key) {
-                $result = $this->createPermission($key, $guard);
-                $this->recordStat($guard, $result['created']);
+                $this->syncPermission($key, $guard);
                 $totalPermissions++;
-
-                if ($this->output->isVerbose()) {
-                    $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
-                    $this->components->twoColumnDetail("  {$key}", $status);
-                }
             }
         }
 
@@ -177,13 +181,7 @@ class SyncPermissionsCommand extends Command
         foreach ($pages as $pageClass) {
             $subject = $this->getPageSubject($pageClass);
             $key = $this->buildPagePermissionKey($prefix, $subject);
-            $result = $this->createPermission($key, $guard);
-            $this->recordStat($guard, $result['created']);
-
-            if ($this->output->isVerbose()) {
-                $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
-                $this->components->twoColumnDetail("  {$key}", $status);
-            }
+            $this->syncPermission($key, $guard);
         }
 
         $this->components->twoColumnDetail(
@@ -205,13 +203,7 @@ class SyncPermissionsCommand extends Command
         foreach ($widgets as $widgetClass) {
             $subject = $this->getWidgetSubject($widgetClass);
             $key = $this->buildWidgetPermissionKey($prefix, $subject);
-            $result = $this->createPermission($key, $guard);
-            $this->recordStat($guard, $result['created']);
-
-            if ($this->output->isVerbose()) {
-                $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
-                $this->components->twoColumnDetail("  {$key}", $status);
-            }
+            $this->syncPermission($key, $guard);
         }
 
         $this->components->twoColumnDetail(
@@ -244,17 +236,32 @@ class SyncPermissionsCommand extends Command
 
         foreach ($customKeys as $key) {
             foreach ($guards as $guard) {
-                $result = $this->createPermission($key, $guard);
-                $this->recordStat($guard, $result['created']);
-
-                if ($this->output->isVerbose()) {
-                    $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
-                    $this->components->twoColumnDetail("  {$key} ({$guard})", $status);
-                }
+                $this->syncPermission($key, $guard, "{$key} ({$guard})");
             }
         }
 
         $this->newLine();
+    }
+
+    /**
+     * Create a permission, record it as produced by this run, and report it.
+     */
+    protected function syncPermission(string $key, string $guard, ?string $label = null): void
+    {
+        $result = $this->createPermission($key, $guard);
+
+        $this->recordStat($guard, $result['created']);
+        $this->markExpected($guard, $key);
+
+        if ($this->output->isVerbose()) {
+            $status = $result['created'] ? '<fg=green>Created</>' : '<fg=gray>Exists</>';
+            $this->components->twoColumnDetail('  ' . ($label ?? $key), $status);
+        }
+    }
+
+    protected function markExpected(string $guard, string $key): void
+    {
+        $this->expected[$guard][$key] = true;
     }
 
     protected function validateGuard(string $guard): void
@@ -278,27 +285,169 @@ class SyncPermissionsCommand extends Command
         }
     }
 
+    /**
+     * Delete permissions for the synced guards that this run did not produce.
+     *
+     * @param  array<Panel>  $panels
+     */
+    protected function prunePermissions(array $panels): void
+    {
+        $this->components->info('Pruning permissions...');
+
+        $syncedPanelIds = array_map(fn (Panel $panel): string => $panel->getId(), $panels);
+
+        $guards = collect($panels)
+            ->map(fn (Panel $panel): string => $panel->getAuthGuard())
+            ->unique()
+            ->values()
+            ->all();
+
+        $pruned = false;
+
+        foreach ($guards as $guard) {
+            if ($this->pruneGuard($guard, $syncedPanelIds)) {
+                $pruned = true;
+            }
+        }
+
+        if ($pruned) {
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+        }
+
+        $this->newLine();
+    }
+
+    /**
+     * Delete the orphaned permissions for a single guard. Returns true if anything was deleted.
+     *
+     * @param  array<string>  $syncedPanelIds
+     */
+    protected function pruneGuard(string $guard, array $syncedPanelIds): bool
+    {
+        $unsyncedPanels = $this->panelsSharingGuard($guard, $syncedPanelIds);
+
+        if ($unsyncedPanels !== []) {
+            $this->components->warn(
+                "Skipping prune for guard '{$guard}': panel(s) [" . implode(', ', $unsyncedPanels)
+                . '] share this guard but were not synced.'
+            );
+
+            return false;
+        }
+
+        $expectedKeys = array_keys($this->expected[$guard] ?? []);
+
+        if ($expectedKeys === []) {
+            $this->components->warn(
+                "Skipping prune for guard '{$guard}': this run produced no permissions, "
+                . 'so every permission for the guard would be deleted.'
+            );
+
+            return false;
+        }
+
+        $permissionModel = $this->getPermissionModel();
+
+        /** @var \Illuminate\Support\Collection<int, \Spatie\Permission\Contracts\Permission> $orphans */
+        $orphans = $permissionModel::query()
+            ->whereRaw('guard_name = ?', [$guard])
+            ->whereNotIn('name', $expectedKeys)
+            ->get();
+
+        if ($orphans->isEmpty()) {
+            $this->components->twoColumnDetail(
+                "<fg=bright-blue>Prune:</> {$guard}",
+                '<fg=gray>nothing to prune</>'
+            );
+
+            return false;
+        }
+
+        $this->components->twoColumnDetail(
+            "<fg=bright-blue>Prune:</> {$guard}",
+            '<fg=red>' . $orphans->count() . ' permission(s) to prune</>'
+        );
+
+        foreach ($orphans as $orphan) {
+            $this->detachPermission($orphan);
+            $orphan->delete();
+            $this->stats[$guard]['deleted']++;
+
+            if ($this->output->isVerbose()) {
+                $this->components->twoColumnDetail("  {$orphan->name}", '<fg=red>Deleted</>');
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Detach a permission from every role and user before deleting it, so the
+     * pivot rows are cleaned up even on databases that don't enforce the
+     * foreign-key cascade Spatie's migration relies on (e.g. SQLite without
+     * the pragma, or MyISAM tables).
+     */
+    protected function detachPermission(Permission $permission): void
+    {
+        $permission->roles()->detach();
+
+        if ($permission instanceof SpatiePermission) {
+            $permission->users()->detach();
+        }
+    }
+
+    /**
+     * Panel IDs that use the given guard but were not part of this sync.
+     *
+     * @param  array<string>  $syncedPanelIds
+     * @return array<int, string>
+     */
+    protected function panelsSharingGuard(string $guard, array $syncedPanelIds): array
+    {
+        return collect(Filament::getPanels())
+            ->filter(fn (Panel $panel): bool => $panel->getAuthGuard() === $guard)
+            ->map(fn (Panel $panel): string => $panel->getId())
+            ->reject(fn (string $id): bool => in_array($id, $syncedPanelIds, true))
+            ->values()
+            ->all();
+    }
+
     protected function displaySummary(): void
     {
         $this->components->info('Summary');
 
+        $pruned = (bool) $this->option('prune');
+
         $totalCreated = 0;
         $totalExisting = 0;
+        $totalDeleted = 0;
 
         foreach ($this->stats as $guard => $counts) {
             $totalCreated += $counts['created'];
             $totalExisting += $counts['existing'];
+            $totalDeleted += $counts['deleted'];
 
             $this->components->twoColumnDetail(
                 "Guard: {$guard}",
-                "<fg=green>{$counts['created']} created</>, <fg=gray>{$counts['existing']} existing</>"
+                $this->formatSummaryCounts($counts['created'], $counts['existing'], $counts['deleted'], $pruned)
             );
         }
 
         $this->newLine();
         $this->components->twoColumnDetail(
             '<fg=bright-white>Total</>',
-            "<fg=green>{$totalCreated} created</>, <fg=gray>{$totalExisting} existing</>"
+            $this->formatSummaryCounts($totalCreated, $totalExisting, $totalDeleted, $pruned)
         );
+    }
+
+    protected function formatSummaryCounts(int $created, int $existing, int $deleted, bool $pruned): string
+    {
+        $summary = "<fg=green>{$created} created</>, <fg=gray>{$existing} existing</>";
+
+        if ($pruned) {
+            $summary .= ", <fg=red>{$deleted} deleted</>";
+        }
+
+        return $summary;
     }
 }
