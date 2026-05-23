@@ -7,6 +7,7 @@ namespace Waguilar\FilamentGuardian\Commands;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Models\Permission as SpatiePermission;
 use Spatie\Permission\PermissionRegistrar;
@@ -348,7 +349,7 @@ class SyncPermissionsCommand extends Command
 
         $permissionModel = $this->getPermissionModel();
 
-        /** @var \Illuminate\Support\Collection<int, \Spatie\Permission\Contracts\Permission> $orphans */
+        /** @var Collection<int, Permission> $orphans */
         $orphans = $permissionModel::query()
             ->whereRaw('guard_name = ?', [$guard])
             ->whereNotIn('name', $expectedKeys)
