@@ -5,19 +5,33 @@ on:
     paths:
       - '**.php'
       - 'phpstan.neon.dist'
+      - '.github/workflows/phpstan.yml'
 
 jobs:
   phpstan:
-    name: phpstan
+    name: phpstan (PHP ${{ matrix.php }} / spatie ${{ matrix.spatie }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Type-check against both supported spatie/laravel-permission majors.
+        # PHP 8.2 can only resolve v6 (v7 requires php ^8.3); 8.3 is v7's floor.
+        include:
+          - php: '8.2'
+            spatie: '^6.0'
+          - php: '8.3'
+            spatie: '^7.0'
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php }}
           coverage: none
+
+      - name: Pin spatie/laravel-permission major
+        run: composer require "spatie/laravel-permission:${{ matrix.spatie }}" --no-update --no-interaction
 
       - name: Install composer dependencies
         uses: ramsey/composer-install@v3
