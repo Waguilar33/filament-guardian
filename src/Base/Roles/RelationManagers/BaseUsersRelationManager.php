@@ -9,6 +9,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use Waguilar\FilamentGuardian\Base\Roles\Tables\BaseUsersTable;
 
 class BaseUsersRelationManager extends RelationManager
@@ -18,6 +19,11 @@ class BaseUsersRelationManager extends RelationManager
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static BackedEnum | string | null $icon = Heroicon::OutlinedUsers;
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return Gate::check('view', $ownerRecord);
+    }
 
     public function table(Table $table): Table
     {

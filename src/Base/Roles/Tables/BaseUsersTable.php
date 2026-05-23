@@ -9,9 +9,11 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DetachAction;
 use Filament\Actions\DetachBulkAction;
 use Filament\Facades\Filament;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\Gate;
 
 class BaseUsersTable
 {
@@ -32,6 +34,9 @@ class BaseUsersTable
                 AttachAction::make()
                     ->preloadRecordSelect()
                     ->multiple()
+                    ->authorize(function (RelationManager $livewire): bool {
+                        return Gate::check('update', $livewire->getOwnerRecord());
+                    })
                     ->action(function (array $data, Table $table): void {
                         /** @var array<int|string> $userIds */
                         $userIds = (array) ($data['recordId'] ?? $data['recordIds'] ?? []);
@@ -51,11 +56,17 @@ class BaseUsersTable
                     }),
             ])
             ->recordActions([
-                DetachAction::make(),
+                DetachAction::make()
+                    ->authorize(function (RelationManager $livewire): bool {
+                        return Gate::check('update', $livewire->getOwnerRecord());
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DetachBulkAction::make(),
+                    DetachBulkAction::make()
+                        ->authorize(function (RelationManager $livewire): bool {
+                            return Gate::check('update', $livewire->getOwnerRecord());
+                        }),
                 ]),
             ]);
     }
