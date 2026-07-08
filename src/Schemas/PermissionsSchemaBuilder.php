@@ -479,6 +479,7 @@ final class PermissionsSchemaBuilder
             ->compact()
             ->collapsible()
             ->collapsed(FilamentGuardianPlugin::get()->shouldCollapseResourceSections())
+            ->dehydratedWhenHidden()
             ->visible(function (Get $get) use ($label, $filteredOptions): bool {
                 // Hide section if no options available after filtering
                 if ($filteredOptions === []) {
