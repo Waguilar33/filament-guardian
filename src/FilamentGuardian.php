@@ -174,7 +174,22 @@ class FilamentGuardian
             ?? config('filament-guardian.super_admin.intercept', self::DEFAULT_SUPER_ADMIN_INTERCEPT);
     }
 
-    /** @api */
+    /**
+     * Whether the given role is a super-admin role.
+     *
+     * Deliberately matched on name alone, across every guard. Unlike
+     * userIsSuperAdmin() this protects a row rather than granting power: its real
+     * consumer is the model-level deleting/updating hooks, which fire for
+     * programmatic writes outside any panel. Guard-scoping it there would leave
+     * every other guard's super-admin role unprotected.
+     *
+     * The UI call sites never see a cross-guard role anyway -- BaseRoleResource
+     * already scopes the query to the panel's guard. Note the role *name* is still
+     * panel-resolved, so panels configured with different super-admin names protect
+     * different rows.
+     *
+     * @api
+     */
     public function isSuperAdminRole(RoleContract $role): bool
     {
         if (! $this->isSuperAdminEnabled()) {
@@ -184,6 +199,19 @@ class FilamentGuardian
         return $role->name === $this->getSuperAdminRoleName();
     }
 
+    /**
+     * Whether the user holds the super-admin role for the panel currently being served.
+     *
+     * This grants a blanket Gate bypass, so it is scoped to the current panel's
+     * guard: a super admin of one panel is not a super admin of another.
+     *
+     * Outside a panel -- console commands, queued jobs, non-Filament routes --
+     * there is no panel to take a guard from, and no honest way to guess one.
+     * Falling back to the default panel's guard would silently pick one panel at
+     * random in a multi-panel app, so the check stays guard-blind there instead:
+     * it matches the super-admin role under any guard, which is how it behaved
+     * everywhere before this became guard-aware.
+     */
     public function userIsSuperAdmin(mixed $user): bool
     {
         if (! $this->isSuperAdminEnabled()) {
@@ -198,7 +226,9 @@ class FilamentGuardian
             return false;
         }
 
-        return (bool) ([$user, 'hasRole'])($this->getSuperAdminRoleName()); // @phpstan-ignore callable.nonCallable
+        $guard = Filament::getCurrentPanel()?->getAuthGuard();
+
+        return (bool) ([$user, 'hasRole'])($this->getSuperAdminRoleName(), $guard); // @phpstan-ignore callable.nonCallable
     }
 
     /**
