@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use ReflectionMethod;
 use ReflectionProperty;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 use Throwable;
 use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder as PermissionKeyBuilderContract;
 
@@ -133,8 +134,11 @@ final class PermissionResolver
             return $this->allPermissions;
         }
 
+        /** @var class-string<Permission> $permissionClass */
+        $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
+
         /** @var Collection<int, string> $permissions */
-        $permissions = Permission::query()
+        $permissions = $permissionClass::query()
             ->whereRaw('guard_name = ?', [$this->guard])
             ->pluck('name');
 

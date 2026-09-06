@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Waguilar\FilamentGuardian\Support;
 
+use ArrayObject;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Model;
@@ -25,11 +26,15 @@ use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
 final class RolePermissionData
 {
     /**
-     * Request-level cache for RolePermissionData instances keyed by panel ID.
+     * Container binding holding this request's cache, keyed by panel ID.
      *
-     * @var array<string, self>
+     * A scoped binding rather than a static property: building this object queries
+     * every permission for the guard and reflects over the panel's resources, so it
+     * is worth caching -- but only for one request. Laravel flushes scoped bindings
+     * between Octane requests and between queued jobs, so a long-lived worker picks
+     * up a guardian:sync instead of serving the permission list it read at boot.
      */
-    private static array $cache = [];
+    private const CACHE_BINDING = 'filament-guardian.role-permission-data';
 
     private PermissionResolver $resolver;
 
@@ -90,11 +95,14 @@ final class RolePermissionData
         $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
         $panelId = $panel->getId();
 
-        if (! isset(self::$cache[$panelId])) {
-            self::$cache[$panelId] = new self(FilamentGuardianPlugin::get(), $panel);
+        $cache = self::cache();
+
+        if (! isset($cache[$panelId])) {
+            $cache[$panelId] = new self(FilamentGuardianPlugin::get(), $panel);
         }
 
-        return self::$cache[$panelId];
+        /** @var self */
+        return $cache[$panelId];
     }
 
     /**
@@ -106,7 +114,24 @@ final class RolePermissionData
      */
     public static function clearCache(): void
     {
-        self::$cache = [];
+        self::cache()->exchangeArray([]);
+    }
+
+    /**
+     * This request's instance cache.
+     *
+     * @return ArrayObject<string, self>
+     */
+    private static function cache(): ArrayObject
+    {
+        $app = app();
+
+        if (! $app->bound(self::CACHE_BINDING)) {
+            $app->scoped(self::CACHE_BINDING, fn (): ArrayObject => new ArrayObject);
+        }
+
+        /** @var ArrayObject<string, self> */
+        return $app->make(self::CACHE_BINDING);
     }
 
     /**
