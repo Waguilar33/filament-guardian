@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian\Actions;
 
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Spatie\Permission\Contracts\Permission;
-use Spatie\Permission\Traits\HasPermissions;
+use Spatie\Permission\Models\Permission as SpatiePermission;
+use Spatie\Permission\PermissionRegistrar;
 use Spatie\Permission\Traits\HasRoles;
 use Waguilar\FilamentGuardian\Facades\Guardian;
 use Waguilar\FilamentGuardian\Schemas\PermissionsSchemaBuilder;
@@ -21,6 +25,10 @@ use Waguilar\FilamentGuardian\Support\RolePermissionData;
  *
  * This action opens a modal showing only permissions NOT inherited from roles.
  * Users can add additional direct permissions on top of their role permissions.
+ *
+ * Every read and write is scoped to the current panel's auth guard. Permissions
+ * belonging to other guards are neither shown, nor counted as role-inherited,
+ * nor touched when the modal is saved.
  */
 final class ManageUserPermissionsAction
 {
@@ -62,8 +70,9 @@ final class ManageUserPermissionsAction
      */
     private static function buildFormData(Model $record): array
     {
-        $directPermissions = self::getDirectPermissions($record);
-        $roleBasedPermissions = self::getRoleBasedPermissions($record);
+        $guard = self::currentGuard();
+        $directPermissions = self::getDirectPermissions($record, $guard);
+        $roleBasedPermissions = self::getRoleBasedPermissions($record, $guard);
 
         // Filter out direct permissions that are now also role-based
         // This ensures they get removed when the form is saved
@@ -105,7 +114,7 @@ final class ManageUserPermissionsAction
      */
     private static function buildSchema(Model $record): array
     {
-        $roleBasedPermissions = self::getRoleBasedPermissions($record);
+        $roleBasedPermissions = self::getRoleBasedPermissions($record, self::currentGuard());
 
         return PermissionsSchemaBuilder::make()
             ->mode(PermissionsSchemaBuilder::MODE_USER)
@@ -114,29 +123,71 @@ final class ManageUserPermissionsAction
     }
 
     /**
-     * Sync the selected direct permissions.
+     * Sync the selected direct permissions for the current panel's guard.
+     *
+     * Only permissions belonging to that guard are granted or revoked. Direct
+     * permissions the user holds under any other guard are left untouched --
+     * Spatie's syncPermissions() detaches every guard, which would let a save
+     * in one panel wipe grants made in another.
      *
      * @param  array<string, mixed>  $data
      */
     private static function syncPermissions(array $data, Model $record): void
     {
-        /** @var Collection<int, string> $selectedPermissions */
-        $selectedPermissions = collect();
+        if (! self::hasPermissionTraits($record)) {
+            return;
+        }
+
+        $guard = self::currentGuard();
+
+        /** @var Collection<int, string> $selectedNames */
+        $selectedNames = collect();
 
         foreach ($data as $permissions) {
             if (is_array($permissions)) {
                 /** @var array<int, string> $permissions */
-                $selectedPermissions = $selectedPermissions->merge($permissions);
+                $selectedNames = $selectedNames->merge($permissions);
             }
         }
 
-        $directPermissions = $selectedPermissions->unique()->values()->all();
+        /** @var class-string<SpatiePermission> $permissionClass */
+        $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
 
-        if (self::hasPermissionTraits($record)) {
-            /** @var callable $syncMethod */
-            $syncMethod = [$record, 'syncPermissions'];
-            $syncMethod($directPermissions);
-        }
+        /** @var Collection<int, SpatiePermission> $selected */
+        $selected = $permissionClass::query()
+            ->whereIn('name', $selectedNames->unique()->values()->all())
+            ->whereRaw('guard_name = ?', [$guard])
+            ->get();
+
+        /** @var Collection<int, Permission> $current */
+        $current = self::directPermissionModels($record)
+            ->filter(fn (Permission $permission): bool => $permission->guard_name === $guard);
+
+        $selectedKeys = $selected->map(fn (SpatiePermission $permission): mixed => $permission->getKey())->all();
+        $currentKeys = $current->map(fn (Permission $permission): mixed => $permission->getKey())->all();
+
+        $toRevoke = $current->reject(
+            fn (Permission $permission): bool => in_array($permission->getKey(), $selectedKeys, true)
+        );
+
+        $toGrant = $selected->reject(
+            fn (SpatiePermission $permission): bool => in_array($permission->getKey(), $currentKeys, true)
+        );
+
+        // Grant before revoke, inside a transaction. Spatie's syncPermissions()
+        // validates the whole set before it detaches anything; doing the revoke
+        // first would commit the deletes and only then discover that the grant is
+        // invalid -- losing the permissions the user already had. The two sets are
+        // disjoint by construction, so the end state is the same either way.
+        DB::transaction(function () use ($record, $toGrant, $toRevoke): void {
+            if ($toGrant->isNotEmpty()) {
+                ([$record, 'givePermissionTo'])($toGrant->values()->all()); // @phpstan-ignore callable.nonCallable
+            }
+
+            if ($toRevoke->isNotEmpty()) {
+                ([$record, 'revokePermissionTo'])($toRevoke->values()); // @phpstan-ignore callable.nonCallable
+            }
+        });
 
         Notification::make()
             ->success()
@@ -145,11 +196,24 @@ final class ManageUserPermissionsAction
     }
 
     /**
-     * Get permissions inherited from the user's roles.
+     * The auth guard of the panel the modal is being used in.
+     */
+    private static function currentGuard(): string
+    {
+        $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
+
+        return $panel->getAuthGuard();
+    }
+
+    /**
+     * Get permissions inherited from the user's roles, for the given guard only.
+     *
+     * A role belonging to another guard grants permissions that this panel never
+     * checks, so its permissions must not be treated as inherited here.
      *
      * @return Collection<int, string>
      */
-    private static function getRoleBasedPermissions(Model $record): Collection
+    private static function getRoleBasedPermissions(Model $record, string $guard): Collection
     {
         if (! self::hasPermissionTraits($record)) {
             /** @var Collection<int, string> $empty */
@@ -165,20 +229,39 @@ final class ManageUserPermissionsAction
         $permissions = $getMethod();
 
         /** @var Collection<int, string> $names */
-        $names = $permissions->pluck('name');
+        $names = $permissions
+            ->filter(fn (Permission $permission): bool => $permission->guard_name === $guard)
+            ->pluck('name')
+            ->values();
 
         return $names;
     }
 
     /**
-     * Get the user's directly assigned permissions.
+     * Get the user's directly assigned permissions, for the given guard only.
      *
      * @return Collection<int, string>
      */
-    private static function getDirectPermissions(Model $record): Collection
+    private static function getDirectPermissions(Model $record, string $guard): Collection
+    {
+        /** @var Collection<int, string> $names */
+        $names = self::directPermissionModels($record)
+            ->filter(fn (Permission $permission): bool => $permission->guard_name === $guard)
+            ->pluck('name')
+            ->values();
+
+        return $names;
+    }
+
+    /**
+     * The user's directly assigned permission models, across every guard.
+     *
+     * @return Collection<int, Permission>
+     */
+    private static function directPermissionModels(Model $record): Collection
     {
         if (! self::hasPermissionTraits($record)) {
-            /** @var Collection<int, string> $empty */
+            /** @var Collection<int, Permission> $empty */
             $empty = collect();
 
             return $empty;
@@ -190,20 +273,17 @@ final class ManageUserPermissionsAction
         /** @var Collection<int, Permission> $permissions */
         $permissions = $getMethod();
 
-        /** @var Collection<int, string> $names */
-        $names = $permissions->pluck('name');
-
-        return $names;
+        return $permissions;
     }
 
     /**
-     * Check if the model uses the required permission traits.
+     * Check if the model uses the required permission trait.
+     *
+     * HasRoles specifically: this action calls getDirectPermissions() and
+     * getPermissionsViaRoles(), neither of which HasPermissions defines on its own.
      */
     private static function hasPermissionTraits(Model $record): bool
     {
-        $usedTraits = class_uses_recursive($record);
-
-        return in_array(HasRoles::class, $usedTraits, true)
-            || in_array(HasPermissions::class, $usedTraits, true);
+        return in_array(HasRoles::class, class_uses_recursive($record), true);
     }
 }
