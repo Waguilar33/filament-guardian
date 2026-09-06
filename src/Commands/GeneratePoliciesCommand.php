@@ -41,11 +41,20 @@ class GeneratePoliciesCommand extends Command
 
     public function handle(): int
     {
-        if ($this->option('all-panels')) {
-            return $this->handleAllPanels();
-        }
+        // processPanel() switches the current panel. Restore whatever was current
+        // on the way out so the rest of the process is not left with an arbitrary
+        // panel silently current.
+        $previousPanel = Filament::getCurrentPanel();
 
-        return $this->handleSinglePanel();
+        try {
+            if ($this->option('all-panels')) {
+                return $this->handleAllPanels();
+            }
+
+            return $this->handleSinglePanel();
+        } finally {
+            Filament::setCurrentPanel($previousPanel);
+        }
     }
 
     protected function handleAllPanels(): int

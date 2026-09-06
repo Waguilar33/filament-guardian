@@ -142,6 +142,19 @@ With this setup, roles created in the admin panel are invisible to the app panel
 > ],
 > ```
 
+### Changing a panel's guard later
+
+Roles and permissions carry the guard they were created under, and nothing rewrites them when you change a panel's `authGuard()`. Point a panel at a new guard and its existing roles go invisible, every user loses every permission, and the Roles page comes up empty — silently.
+
+If you already have roles and permissions on the old guard, move them across with [`guardian:migrate-guard`](#2-guardianmigrate-guard) rather than re-creating them by hand:
+
+```bash
+php artisan guardian:migrate-guard --from=web --to=admin --dry-run
+php artisan guardian:migrate-guard --from=web --to=admin
+```
+
+`guardian:sync` warns you when it finds permissions under a guard no panel uses, so you'll normally be told this happened before you go looking for it.
+
 ## Multi-Tenancy
 
 Filament has built-in multi-tenancy support that automatically scopes the panel to the current tenant — resource queries, record resolution, and new record associations are all handled by Filament itself. The plugin integrates with this by reading the active tenant from Filament's context and using Spatie's teams feature to scope roles and permissions to that tenant accordingly.
@@ -360,13 +373,30 @@ FilamentGuardianPlugin::make()
 
 Per-panel settings always take priority over the global config. Any option not set on the plugin falls back to the global config value.
 
-### 3. Tenant panels — automatic role creation
+### 3. Super-admin is scoped to the panel's guard
+
+The super-admin bypass is granted per guard, the same way roles and permissions are. A user holding `Super Admin` under the `web` guard is a super admin in panels that use the `web` guard — and an ordinary user everywhere else. Give someone blanket access to two panels on different guards and they need the super-admin role under both.
+
+Outside a panel there is no guard to scope to, so the check falls back to matching the super-admin role under **any** guard:
+
+| Context | Bypass applies when the user holds `Super Admin` under… |
+|---------|--------------------------------------------------------|
+| A Filament panel request | that panel's auth guard |
+| Console command, queued job, non-Filament route | any guard |
+
+Guessing a guard outside a panel would mean silently picking one panel's guard in a multi-panel app, so the check stays broad there instead — which is also what keeps super-admin working in your commands and jobs.
+
+> **Upgrading:** before this, the bypass matched the role name under any guard everywhere, so one `Super Admin` role granted access to every panel. If you relied on that with multiple guards, assign the super-admin role under each panel's guard — `php artisan guardian:super-admin --panel=<id>` creates and assigns it per panel.
+
+Role *protection* is deliberately not scoped this way: a super-admin role is blocked from being edited or deleted no matter which panel you're looking at it from.
+
+### 4. Tenant panels — automatic role creation
 
 For panels with tenancy, the super-admin role is created automatically every time a new tenant is created. The plugin listens for Eloquent's `created` event on your tenant model and creates a scoped super-admin role for that tenant in the background — no command to run, no migration to write, nothing to wire up manually.
 
 Once a tenant is created, the plugin automatically creates a scoped super-admin role for it, ready to be assigned to whoever should have full access to that tenant.
 
-### 4. Non-tenant panels — manual role creation
+### 5. Non-tenant panels — manual role creation
 
 For panels without tenancy, the role is not created automatically because there is no tenant lifecycle event to hook into. Depending on your situation, you have two ways to create the role and assign it.
 
@@ -408,7 +438,7 @@ Guardian::assignSuperAdminTo($user, 'admin');
 $role = Guardian::getSuperAdminRole('admin');
 ```
 
-### 5. Facade reference
+### 6. Facade reference
 
 All methods accept an optional `$panelId`. When omitted, the method resolves configuration from the current Filament panel.
 
@@ -628,7 +658,71 @@ php artisan guardian:sync --prune                       # all panels
 php artisan guardian:sync --panel=admin --panel=support --prune
 ```
 
-### 2. guardian:policies
+#### Detecting an abandoned guard
+
+Every sync ends by checking for permissions that belong to a guard no panel uses. That's what changing a panel's guard looks like from the outside: the old guard's roles and permissions are still in the database, still attached to users, and completely invisible to every panel.
+
+```
+WARN  Guard 'web' has 24 permission(s) and 1 role(s) but no panel uses it.
+      Users holding them are not authorized anywhere.
+
+INFO  Move them with:
+      php artisan guardian:migrate-guard --from=web --to=admin --mode=merge --dry-run
+```
+
+### 2. guardian:migrate-guard
+
+Moves roles and permissions from one auth guard to another. Use it when you started on the default `web` guard and later split a panel onto its own guard — the recommended way to adopt per-panel guards after the fact.
+
+```bash
+# See what would change, without writing anything
+php artisan guardian:migrate-guard --from=web --to=admin --dry-run
+
+# Do it
+php artisan guardian:migrate-guard --from=web --to=admin
+```
+
+Rows are moved by rewriting `guard_name` in place, so every primary key stays stable and the pivot tables follow automatically. Nobody loses a role and no role loses a permission.
+
+| Option | |
+|--------|--|
+| `--from=` | The guard to move away from (required) |
+| `--to=` | The guard to move to (required) |
+| `--mode=` | `move` (default) or `merge` — see below |
+| `--only=` | `permissions` or `roles`, to limit the run |
+| `--dry-run` | Report the plan and write nothing (never exits non-zero) |
+| `--allow-unregistered-guard` | Proceed even if `--to` is missing from `config/auth.php` |
+| `--force` | Skip the confirmation prompt |
+
+#### The two modes
+
+They differ only in what happens when a name already exists under the target guard.
+
+**`--mode=move`** (default) aborts and lists the conflicts, changing nothing:
+
+```
+ERROR These names already exist under guard 'admin', so nothing was changed.
+  permission ViewAny:Post
+  role Editor
+
+INFO  Re-run with --mode=merge to fold them into the existing target rows.
+```
+
+**`--mode=merge`** keeps the target row, repoints everything that referenced the source row onto it, then deletes the source row. A role that exists under both guards ends up with the **union** of both permission sets, and a user who held both copies ends up holding one.
+
+If you re-run `guardian:sync` *after* changing the panel's guard, the target guard already has a copy of every name — so `merge` is the mode you want. The warning printed at the end of the sync tells you which one applies.
+
+> **Back up your database first, and run it in maintenance mode.** The whole migration runs in a single transaction and `--dry-run` shows you the plan, but this rewrites authorization data, there's no undo, and the transaction holds write locks on the roles and permissions tables for its duration.
+
+The target guard must be registered in `config/auth.php` — migrating onto a guard Laravel doesn't know about leaves an authorization system that throws on `hasPermissionTo()` and `assignRole()`. If you're adding the guard in the same deploy, pass `--allow-unregistered-guard`.
+
+`--only` migrates half the picture, which leaves roles on one guard linked to permissions on another. Spatie throws on a cross-guard link, so run both halves before using the application — the command warns you when you've only done one.
+
+Permissions are migrated before roles, because merging permissions can leave two roles pointing at the same permission — a collision that only surfaces once the roles themselves collapse. Both passes de-duplicate before repointing.
+
+With teams enabled, roles are matched on `(team, name)` and pivot rows are de-duplicated per team.
+
+### 3. guardian:policies
 
 Generates Laravel policy classes for your Filament resources, wired to the permissions synced by `guardian:sync`. Run this during development when you add a new resource or need to regenerate existing policies.
 
@@ -661,7 +755,7 @@ public function update(User $user, User $model): bool
 }
 ```
 
-### 3. guardian:create-user
+### 4. guardian:create-user
 
 Creates a user account. Most useful on first deployment when your database is empty and you need an initial account to access the panel.
 
@@ -701,7 +795,7 @@ php artisan guardian:create-user --name="Admin" --email="admin@example.com" --pa
 php artisan guardian:super-admin --panel=admin --email="admin@example.com"
 ```
 
-### 4. guardian:super-admin
+### 5. guardian:super-admin
 
 Creates the super-admin role for a non-tenant panel and optionally assigns it to a user. For tenant panels, this role is created automatically when a tenant is created — this command is only needed for panels without tenancy.
 
@@ -1484,13 +1578,24 @@ public function table(Table $table): Table
 }
 ```
 
+> **Eager-load the roles relationship.** The action hides itself for super-admins, which means it checks the user's roles once per row — a query per row unless the table loads them up front:
+>
+> ```php
+> return $table
+>     ->modifyQueryUsing(fn (Builder $query) => $query->with('roles'))
+>     ->columns([...])
+> ```
+>
+> On a 50-row page that's the difference between 51 queries and 2.
+
 ### 2. Behavior
 
 The slide-over displays the user's name and email at the top so it's always clear whose permissions you're editing. The permission UI follows the same tab format as the role resource — Resources, Pages, Widgets, and Custom — with the same search and select-all toggle.
 
 A few things happen automatically:
 
-- **Role permissions excluded** — permissions already granted through roles are not shown; they're managed at the role level
+- **Scoped to the panel's guard** — only permissions belonging to the current panel's auth guard are listed, ticked, or saved. Direct permissions the user holds under another panel's guard are left untouched when you save
+- **Role permissions excluded** — permissions already granted through roles are not shown; they're managed at the role level. Roles belonging to a different guard don't count, since this panel never checks them
 - **Role permissions notice** — a warning shows how many permissions the user already has from their roles
 - **Hidden for super-admins** — the action doesn't appear for super-admin users since they bypass all permission checks
 - **Automatic cleanup** — when saved, any direct permissions that are now also covered by a role are removed to avoid redundancy

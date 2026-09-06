@@ -10,6 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Models\Permission as SpatiePermission;
+use Spatie\Permission\Models\Role as SpatieRole;
 use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Waguilar\FilamentGuardian\Commands\Concerns\CreatesPermissions;
@@ -42,6 +43,23 @@ class SyncPermissionsCommand extends Command
 
     public function handle(): int
     {
+        // syncPanel() switches the current panel as it goes. Restore whatever was
+        // current on the way out so the rest of the process -- a seeder calling
+        // Artisan::call(), the next test in a shared process -- is not left with an
+        // arbitrary panel silently current.
+        $previousPanel = Filament::getCurrentPanel();
+
+        try {
+            return $this->sync();
+        } finally {
+            Filament::setCurrentPanel($previousPanel);
+        }
+    }
+
+    protected function sync(): int
+    {
+        $this->forgetExistingPermissionNames();
+
         $panels = $this->getPanelsToSync();
 
         if ($panels === []) {
@@ -64,8 +82,105 @@ class SyncPermissionsCommand extends Command
         }
 
         $this->displaySummary();
+        $this->reportOrphanedGuards();
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Warn about permissions left behind under a guard no panel uses.
+     *
+     * This is what a guard change looks like from the outside: the old guard's
+     * permissions and roles are still in the database, still attached to users,
+     * and completely invisible to every panel.
+     *
+     * Only guards that share permission names with a panel's guard are reported.
+     * This run has just created a copy of every name under each panel's guard, so
+     * a genuine guard change always overlaps -- while an unrelated guard managed
+     * outside Filament (an API guard, say) stays quiet instead of warning on every
+     * sync.
+     */
+    protected function reportOrphanedGuards(): void
+    {
+        /** @var Collection<int, string> $panelGuards */
+        $panelGuards = collect(Filament::getPanels())
+            ->map(fn (Panel $panel): string => $panel->getAuthGuard())
+            ->unique()
+            ->values();
+
+        /** @var class-string<SpatiePermission> $permissionClass */
+        $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
+
+        /** @var Collection<int, string> $guardsInUse */
+        $guardsInUse = $permissionClass::query()
+            ->select('guard_name')
+            ->distinct()
+            ->pluck('guard_name');
+
+        /** @var Collection<int, string> $orphaned */
+        $orphaned = $guardsInUse
+            ->reject(fn (string $guard): bool => $panelGuards->contains($guard))
+            ->filter(function (string $guard) use ($panelGuards): bool {
+                foreach ($panelGuards as $panelGuard) {
+                    if ($this->guardsShareNames($guard, $panelGuard)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->values();
+
+        if ($orphaned->isEmpty()) {
+            return;
+        }
+
+        /** @var class-string<SpatieRole> $roleClass */
+        $roleClass = app(PermissionRegistrar::class)->getRoleClass();
+
+        $this->newLine();
+
+        foreach ($orphaned as $guard) {
+            $permissionCount = $permissionClass::query()->whereRaw('guard_name = ?', [$guard])->count();
+            $roleCount = $roleClass::query()->whereRaw('guard_name = ?', [$guard])->count();
+
+            $this->components->warn(
+                "Guard '{$guard}' has {$permissionCount} permission(s) and {$roleCount} role(s) but no panel uses it. "
+                . 'Anyone holding them is not authorized in any panel.'
+            );
+        }
+
+        $target = $panelGuards->first();
+        $source = $orphaned->first();
+
+        if ($target === null || $orphaned->count() > 1) {
+            $this->components->info('Move them with guardian:migrate-guard, or delete them if they are no longer needed.');
+
+            return;
+        }
+
+        // The overlap that got us here means --mode=move would refuse on those
+        // names, so point at merge whenever this target is the one that overlaps.
+        $mode = $this->guardsShareNames($source, $target) ? 'merge' : 'move';
+
+        $this->components->info('Move them with:');
+        $this->line("  <fg=gray>php artisan guardian:migrate-guard --from={$source} --to={$target} --mode={$mode} --dry-run</>");
+    }
+
+    /**
+     * Whether any permission name exists under both guards.
+     */
+    protected function guardsShareNames(string $source, string $target): bool
+    {
+        /** @var class-string<SpatiePermission> $permissionClass */
+        $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
+
+        return $permissionClass::query()
+            ->whereRaw('guard_name = ?', [$source])
+            ->whereIn('name', $permissionClass::query()
+                ->whereRaw('guard_name = ?', [$target])
+                ->select('name'))
+            ->exists();
     }
 
     /**

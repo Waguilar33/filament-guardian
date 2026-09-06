@@ -24,6 +24,7 @@ use Spatie\Permission\PermissionRegistrar;
 use Waguilar\FilamentGuardian\Commands\CreateUserCommand;
 use Waguilar\FilamentGuardian\Commands\FilamentGuardianCommand;
 use Waguilar\FilamentGuardian\Commands\GeneratePoliciesCommand;
+use Waguilar\FilamentGuardian\Commands\MigrateGuardCommand;
 use Waguilar\FilamentGuardian\Commands\PublishRoleResourceCommand;
 use Waguilar\FilamentGuardian\Commands\SetupSuperAdminCommand;
 use Waguilar\FilamentGuardian\Commands\SyncPermissionsCommand;
@@ -339,6 +340,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
             CreateUserCommand::class,
             FilamentGuardianCommand::class,
             GeneratePoliciesCommand::class,
+            MigrateGuardCommand::class,
             PublishRoleResourceCommand::class,
             SetupSuperAdminCommand::class,
             SyncPermissionsCommand::class,

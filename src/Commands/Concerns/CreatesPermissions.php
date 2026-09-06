@@ -11,30 +11,82 @@ use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder;
 trait CreatesPermissions
 {
     /**
+     * Existing permission names for the current run, keyed by guard then name.
+     *
+     * A sync calls createPermission() once per discovered key, and asking the
+     * database "does this one exist?" every time is one query per permission. The
+     * command already knows it owns the permission table for the guards it syncs,
+     * so it reads the guard's names once and keeps the answer.
+     *
+     * Scoped to a single run: Artisan reuses command instances within a process, so
+     * a second Artisan::call() would otherwise trust names read before the first
+     * one -- and silently skip re-creating anything deleted in between.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $existingPermissionNames = [];
+
+    /**
+     * Forget the permission names read during a previous run of this command.
+     */
+    protected function forgetExistingPermissionNames(): void
+    {
+        $this->existingPermissionNames = [];
+    }
+
+    /**
      * Create a permission in the database if it doesn't exist.
      *
      * @return array{name: string, created: bool}
      */
     protected function createPermission(string $name, string $guard): array
     {
-        $permissionModel = $this->getPermissionModel();
+        $existing = $this->existingPermissionNamesForGuard($guard);
 
-        $exists = $permissionModel::query()
-            ->whereRaw('name = ?', [$name])
-            ->whereRaw('guard_name = ?', [$guard])
-            ->exists();
-
-        if (! $exists) {
-            $permissionModel::create([
+        if (isset($existing[$name])) {
+            return [
                 'name' => $name,
-                'guard_name' => $guard,
-            ]);
+                'created' => false,
+            ];
         }
+
+        // query()->create() rather than the model's static create(): the static one
+        // re-reads Spatie's permission cache to raise PermissionAlreadyExists, and
+        // that cache was just invalidated by the previous insert -- so in a loop it
+        // reloads the whole table per permission. This is the same call Spatie's own
+        // findOrCreate() makes, and it still fires the model events their
+        // cache-forget hook relies on.
+        $this->getPermissionModel()::query()->create([
+            'name' => $name,
+            'guard_name' => $guard,
+        ]);
+
+        $this->existingPermissionNames[$guard][$name] = true;
 
         return [
             'name' => $name,
-            'created' => ! $exists,
+            'created' => true,
         ];
+    }
+
+    /**
+     * The permission names already stored for a guard, read once per run.
+     *
+     * @return array<string, true>
+     */
+    private function existingPermissionNamesForGuard(string $guard): array
+    {
+        if (! array_key_exists($guard, $this->existingPermissionNames)) {
+            /** @var array<int, string> $names */
+            $names = $this->getPermissionModel()::query()
+                ->whereRaw('guard_name = ?', [$guard])
+                ->pluck('name')
+                ->all();
+
+            $this->existingPermissionNames[$guard] = array_fill_keys($names, true);
+        }
+
+        return $this->existingPermissionNames[$guard];
     }
 
     /**
