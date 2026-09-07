@@ -6,6 +6,7 @@ namespace Waguilar\FilamentGuardian;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Filament\PanelRegistry;
 use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
 use Waguilar\FilamentGuardian\Base\Roles\BaseRoleResource;
@@ -43,11 +44,7 @@ class FilamentGuardianPlugin implements Plugin
 
         $this->syncClusterToConfig();
 
-        if (! $this->panelHasRoleResource($panel)) {
-            $panel->resources([
-                RoleResource::class,
-            ]);
-        }
+        $this->registerRoleResourceWhenPanelIsComplete($panel);
 
         if ($panel->hasTenancy()) {
             $panel->tenantMiddleware([
@@ -58,6 +55,48 @@ class FilamentGuardianPlugin implements Plugin
                 SetPermissionsTeam::class,
             ], isPersistent: true);
         }
+    }
+
+    /**
+     * Register the bundled role resource once the panel is fully assembled.
+     *
+     * Filament calls register() from the middle of the builder chain, so a panel
+     * whose ->plugins() sits above its ->discoverResources() still reads as empty and
+     * the host's own role resource is invisible here. PanelRegistry resolves once
+     * every panel is built and before routes are registered, which makes
+     * afterResolving() the first honest reading.
+     *
+     * Not boot(): it runs while a request is served, after routes and Livewire
+     * components exist, so a resource added there gets neither.
+     */
+    protected function registerRoleResourceWhenPanelIsComplete(Panel $panel): void
+    {
+        $register = function () use ($panel): void {
+            if ($this->panelHasRoleResource($panel)) {
+                return;
+            }
+
+            // Every panel has now written the shared cluster key; re-sync so this
+            // panel's value is the one registerToCluster() reads below.
+            $this->syncClusterToConfig();
+
+            $panel->resources([
+                RoleResource::class,
+            ]);
+
+            // Registers the resource's pages as Livewire components. Already run once,
+            // and safe to repeat: everything it registers is keyed by name.
+            $panel->register();
+        };
+
+        // A panel built after boot has no registry resolution left to wait for.
+        if (app()->isBooted()) {
+            $register();
+
+            return;
+        }
+
+        app()->afterResolving(PanelRegistry::class, $register);
     }
 
     /**
