@@ -224,6 +224,27 @@ php artisan migrate
 
 > **Important:** If you already have data in these tables, the migration is safe to run as long as your existing records don't violate the new unique constraint. On large production tables, consider running it during a maintenance window.
 
+> **Note:** This migration cannot run on SQLite, which does not support dropping a primary key. Use MySQL, MariaDB, or PostgreSQL for a mixed tenant/non-tenant setup.
+
+#### Already on an earlier version? Run the corrective migration
+
+Earlier releases left `model_has_permissions` with a primary key of `(permission_id, model_id, model_type)` — the tenant column removed. Permissions are **not** tenant-scoped in Spatie: one permission row is shared by every tenant. That key therefore forbids a user who belongs to two tenants from holding the same permission in both, and the second grant fails with a duplicate key error:
+
+```
+SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry
+```
+
+If you published the multi-tenancy migration before this release, publish and run the corrective one:
+
+```bash
+php artisan vendor:publish --tag="filament-guardian-multitenancy-fix"
+php artisan migrate
+```
+
+It drops that primary key and nothing else. The unique constraint on `(tenant_id, permission_id, model_id, model_type)` still prevents granting the same permission twice within one tenant. It is safe to run more than once — it checks for the key first — and it leaves `model_has_roles` untouched, since roles are tenant-scoped and each tenant gets its own role row.
+
+Fresh installs don't need this: the migration published by `filament-guardian-multitenancy` already produces the corrected shape.
+
 ### 3. Configure panel with tenancy
 
 ```php

@@ -1,0 +1,110 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Corrective migration for applications that already ran an earlier version of
+ * make_spatie_team_column_nullable.
+ *
+ * That version left model_has_permissions with a primary key of
+ * (permission_id, model_id, model_type) — the tenant column removed. Because
+ * permissions are not tenant-scoped in Spatie (one permission row is shared by
+ * every tenant), that key forbids a user who belongs to two tenants from holding
+ * the same permission in both: the second grant fails with a duplicate key error.
+ *
+ * Dropping the primary key resolves it. The unique constraint added by the same
+ * migration — (tenant_id, permission_id, model_id, model_type) — still prevents
+ * granting the same permission twice within one tenant.
+ *
+ * model_has_roles is deliberately left alone. Roles are tenant-scoped, so each
+ * tenant has its own role row and the same role_id is never legitimately assigned
+ * to one user under two tenants.
+ *
+ * Safe to run on a table that has already been corrected: it checks for the key
+ * before dropping it and does nothing if it is absent.
+ *
+ * Not supported on SQLite, which cannot drop a primary key — the same limitation
+ * applies to the migration this one corrects.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! config('permission.teams')) {
+            return;
+        }
+
+        $table = $this->tableName();
+
+        if (! $this->hasPrimaryKey($table)) {
+            return;
+        }
+
+        /** @var array<string, string> $columnNames */
+        $columnNames = config('permission.column_names');
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
+
+        Schema::table($table, function (Blueprint $blueprint) use ($table, $pivotPermission): void {
+            // The primary key is the index backing the permission_id foreign key, and
+            // MySQL refuses to drop it while that is true. The unique constraint
+            // cannot take over because the tenant column is leftmost, so give the
+            // foreign key an index of its own first.
+            if (! Schema::hasIndex($table, 'model_has_permissions_permission_id_index')) {
+                $blueprint->index($pivotPermission, 'model_has_permissions_permission_id_index');
+            }
+
+            $blueprint->dropPrimary('model_has_permissions_permission_model_type_primary');
+        });
+    }
+
+    public function down(): void
+    {
+        if (! config('permission.teams')) {
+            return;
+        }
+
+        $table = $this->tableName();
+
+        if ($this->hasPrimaryKey($table)) {
+            return;
+        }
+
+        /** @var array<string, string> $columnNames */
+        $columnNames = config('permission.column_names');
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? 'permission_id';
+        $modelMorphKey = $columnNames['model_morph_key'];
+
+        // This restores the key that caused the bug, so it fails if any user now
+        // holds the same permission under more than one tenant. Remove those rows
+        // first if you genuinely need to roll back.
+        Schema::table($table, function (Blueprint $blueprint) use ($pivotPermission, $modelMorphKey): void {
+            $blueprint->primary(
+                [$pivotPermission, $modelMorphKey, 'model_type'],
+                'model_has_permissions_permission_model_type_primary'
+            );
+
+            $blueprint->dropIndex('model_has_permissions_permission_id_index');
+        });
+    }
+
+    private function tableName(): string
+    {
+        /** @var array<string, string> $tableNames */
+        $tableNames = config('permission.table_names');
+
+        return $tableNames['model_has_permissions'];
+    }
+
+    private function hasPrimaryKey(string $table): bool
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if ($index['primary'] ?? false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+};

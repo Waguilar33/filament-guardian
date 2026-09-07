@@ -14,9 +14,22 @@ use Illuminate\Support\Facades\Schema;
  * panel tries to insert roles with no tenant — since all panels share the same
  * database, those records need tenant_id to be NULL.
  *
- * This migration makes the column nullable and restructures the primary key on
- * both pivot tables so records with NULL tenant_id can coexist alongside records
- * with a tenant_id, without violating database constraints.
+ * This migration makes the column nullable and restructures the keys on both
+ * pivot tables so records with NULL tenant_id can coexist alongside records with
+ * a tenant_id, without violating database constraints.
+ *
+ * The two tables are treated differently on purpose:
+ *
+ * - model_has_permissions keeps NO primary key. Permissions are not tenant-scoped
+ *   in Spatie -- one permission row is shared by every tenant -- so a user who
+ *   belongs to two tenants must be able to hold the same permission in both. Any
+ *   primary key that omits the tenant column would forbid that. The unique
+ *   constraint still prevents granting the same permission twice within a tenant.
+ *
+ * - model_has_roles keeps a primary key without the tenant column. Roles ARE
+ *   tenant-scoped: each tenant gets its own role row, so the same role_id is never
+ *   legitimately assigned to one user under two tenants, and keeping the key here
+ *   preserves duplicate protection for assignments made with no tenant.
  *
  * If you are using UUID primary keys instead of Spatie's default integer IDs,
  * replace `->unsignedBigInteger()` with `->uuid()` in the change() calls below.
@@ -32,17 +45,21 @@ return new class extends Migration
         $pivotRole = $columnNames['role_pivot_key'] ?? 'role_id';
         $modelMorphKey = $columnNames['model_morph_key'];
 
-        Schema::table($tableNames['model_has_permissions'], function (Blueprint $table) use ($teamForeignKey, $pivotPermission, $modelMorphKey) {
+        Schema::table($tableNames['model_has_permissions'], function (Blueprint $table) use ($tableNames, $teamForeignKey, $pivotPermission, $modelMorphKey) {
+            // The primary key is currently the index backing the permission_id
+            // foreign key, and MySQL refuses to drop it while that is true. Give the
+            // foreign key an index of its own first -- the unique constraint below
+            // cannot serve as one because the tenant column is leftmost.
+            if (! Schema::hasIndex($tableNames['model_has_permissions'], 'model_has_permissions_permission_id_index')) {
+                $table->index($pivotPermission, 'model_has_permissions_permission_id_index');
+            }
+
             $table->dropPrimary('model_has_permissions_permission_model_type_primary');
 
             // Replace ->uuid() here if you are using UUID primary keys
             $table->unsignedBigInteger($teamForeignKey)->nullable()->change();
 
-            $table->primary(
-                [$pivotPermission, $modelMorphKey, 'model_type'],
-                'model_has_permissions_permission_model_type_primary'
-            );
-
+            // Deliberately no primary key here -- see the note at the top of this file.
             $table->unique(
                 [$teamForeignKey, $pivotPermission, $modelMorphKey, 'model_type'],
                 'model_has_permissions_team_unique'
@@ -78,7 +95,6 @@ return new class extends Migration
 
         Schema::table($tableNames['model_has_permissions'], function (Blueprint $table) use ($teamForeignKey, $pivotPermission, $modelMorphKey) {
             $table->dropUnique('model_has_permissions_team_unique');
-            $table->dropPrimary('model_has_permissions_permission_model_type_primary');
 
             $table->unsignedBigInteger($teamForeignKey)->nullable(false)->change();
 
@@ -86,10 +102,24 @@ return new class extends Migration
                 [$teamForeignKey, $pivotPermission, $modelMorphKey, 'model_type'],
                 'model_has_permissions_permission_model_type_primary'
             );
+
+            // model_has_permissions_permission_id_index is deliberately kept. The
+            // restored primary key leads with the tenant column, so this index is
+            // once again the only one backing the permission_id foreign key and
+            // MySQL will not allow it to be dropped.
         });
 
-        Schema::table($tableNames['model_has_roles'], function (Blueprint $table) use ($teamForeignKey, $pivotRole, $modelMorphKey) {
+        Schema::table($tableNames['model_has_roles'], function (Blueprint $table) use ($tableNames, $teamForeignKey, $pivotRole, $modelMorphKey) {
             $table->dropUnique('model_has_roles_team_unique');
+
+            // The primary key added by up() leads with the role column, making it the
+            // only index backing the role_id foreign key. Give the foreign key its own
+            // index before dropping it, and leave that index in place afterwards --
+            // the restored key leads with the tenant column and cannot replace it.
+            if (! Schema::hasIndex($tableNames['model_has_roles'], 'model_has_roles_role_id_index')) {
+                $table->index($pivotRole, 'model_has_roles_role_id_index');
+            }
+
             $table->dropPrimary('model_has_roles_role_model_type_primary');
 
             $table->unsignedBigInteger($teamForeignKey)->nullable(false)->change();

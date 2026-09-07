@@ -43,7 +43,12 @@ abstract class BaseRoleResource extends Resource
 
     /**
      * Filter roles by the current panel's guard.
-     * Tenant scoping is handled by Spatie's global scope via SetPermissionsTeam middleware.
+     *
+     * Tenant scoping is Filament's, not Spatie's: on a tenant panel it applies the
+     * global scope that Resource::registerTenancyModelGlobalScope() adds to the
+     * role model at panel boot, which parent::getEloquentQuery() then inherits.
+     * Spatie's Role model has no global scope at all -- its team handling lives in
+     * the relations and the registrar, so it never filters a bare query.
      *
      * @return Builder<Model>
      */
