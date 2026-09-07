@@ -6,6 +6,7 @@ namespace Waguilar\FilamentGuardian;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
 use Waguilar\FilamentGuardian\Concerns\HasContentTabs;
 use Waguilar\FilamentGuardian\Concerns\HasNavigation;
@@ -87,8 +88,15 @@ class FilamentGuardianPlugin implements Plugin
     {
         $this->panel = $panel;
 
-        if ($panel->hasTenancy()) {
-            app(PermissionRegistrar::class)->teams = true;
+        // Spatie's teams feature decides the pivot schema, so it has to be enabled in
+        // config before the migration runs. Forcing the registrar flag on here instead
+        // would leave every role query looking for a column that does not exist.
+        if ($panel->hasTenancy() && ! app(PermissionRegistrar::class)->teams) {
+            throw new RuntimeException(
+                "Panel '{$panel->getId()}' uses tenancy, but Spatie's teams feature is disabled. "
+                . "Set 'teams' => true in config/permission.php and run the permission migration. "
+                . 'Enabling it after the migration has run requires a schema change.'
+            );
         }
     }
 
