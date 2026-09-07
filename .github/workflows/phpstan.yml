@@ -14,13 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Type-check against both supported spatie/laravel-permission majors.
-        # PHP 8.2 can only resolve v6 (v7 requires php ^8.3); 8.3 is v7's floor.
+        # Type-check against every supported spatie/laravel-permission major.
+        # PHP 8.2 can only resolve v6; v7 and v8 both require php ^8.3.
         include:
           - php: '8.2'
             spatie: '^6.0'
           - php: '8.3'
             spatie: '^7.0'
+          - php: '8.3'
+            spatie: '^8.0'
     steps:
       - uses: actions/checkout@v4
 
