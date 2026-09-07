@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian\Base\Roles\RelationManagers;
 
 use BackedEnum;
+use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -22,7 +23,7 @@ class BaseUsersRelationManager extends RelationManager
 
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
-        return Gate::check('view', $ownerRecord);
+        return Gate::forUser(Filament::auth()->user())->check('view', $ownerRecord);
     }
 
     public function table(Table $table): Table

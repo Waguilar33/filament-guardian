@@ -12,6 +12,7 @@ use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Gate;
 
@@ -35,7 +36,7 @@ class BaseUsersTable
                     ->preloadRecordSelect()
                     ->multiple()
                     ->authorize(function (RelationManager $livewire): bool {
-                        return Gate::check('update', $livewire->getOwnerRecord());
+                        return self::canUpdate($livewire->getOwnerRecord());
                     })
                     ->action(function (array $data, Table $table): void {
                         /** @var array<int|string> $userIds */
@@ -58,16 +59,25 @@ class BaseUsersTable
             ->recordActions([
                 DetachAction::make()
                     ->authorize(function (RelationManager $livewire): bool {
-                        return Gate::check('update', $livewire->getOwnerRecord());
+                        return self::canUpdate($livewire->getOwnerRecord());
                     }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DetachBulkAction::make()
                         ->authorize(function (RelationManager $livewire): bool {
-                            return Gate::check('update', $livewire->getOwnerRecord());
+                            return self::canUpdate($livewire->getOwnerRecord());
                         }),
                 ]),
             ]);
+    }
+
+    /**
+     * Gate::check() resolves the default guard's user, which is nobody on a panel
+     * configured with any other guard -- hiding these actions from everyone.
+     */
+    public static function canUpdate(Model $ownerRecord): bool
+    {
+        return Gate::forUser(Filament::auth()->user())->check('update', $ownerRecord);
     }
 }

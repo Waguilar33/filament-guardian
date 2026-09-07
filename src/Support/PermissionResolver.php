@@ -250,35 +250,59 @@ final class PermissionResolver
      */
     private function resolveWidgetLabel(string $widgetClass): string
     {
-        // Try to get heading from static property or method first (avoids instantiation)
-        if (method_exists($widgetClass, 'getHeading') && (new ReflectionMethod($widgetClass, 'getHeading'))->isStatic()) {
-            /** @var mixed $heading */
-            $heading = $widgetClass::getHeading();
+        $heading = $this->readWidgetHeading($widgetClass);
 
-            if (filled($heading) && is_string($heading)) {
-                return $heading;
-            }
+        if ($heading !== null) {
+            return $heading;
         }
 
-        // Check for static $heading property
-        if (property_exists($widgetClass, 'heading')) {
-            $reflection = new ReflectionProperty($widgetClass, 'heading');
-            if ($reflection->isStatic()) {
-                $heading = $reflection->getValue();
+        return str(class_basename($widgetClass))
+            ->kebab()
+            ->replace('-', ' ')
+            ->title()
+            ->toString();
+    }
 
-                if (filled($heading) && is_string($heading)) {
-                    return $heading;
+    /**
+     * Read a widget's heading, or null if it does not usefully have one.
+     *
+     * Filament exposes no public API for this: StatsOverviewWidget::getHeading() is
+     * protected and ChartWidget's is public, so the method is reached by reflection
+     * rather than a call. Everything here runs against consumer code that may hit the
+     * database or a request-only dependency, so a failure falls back to the class name
+     * rather than taking down the whole role form.
+     *
+     * @param  class-string  $widgetClass
+     */
+    private function readWidgetHeading(string $widgetClass): ?string
+    {
+        try {
+            if (property_exists($widgetClass, 'heading')) {
+                $property = new ReflectionProperty($widgetClass, 'heading');
+
+                if ($property->isStatic()) {
+                    /** @var mixed $heading */
+                    $heading = $property->getValue();
+
+                    if (filled($heading) && is_string($heading)) {
+                        return $heading;
+                    }
                 }
             }
-        }
 
-        // Fall back to instantiation only if necessary
-        /** @var object $widget */
-        $widget = app($widgetClass);
+            if (! method_exists($widgetClass, 'getHeading')) {
+                return null;
+            }
 
-        if (method_exists($widget, 'getHeading')) {
+            $method = new ReflectionMethod($widgetClass, 'getHeading');
+
+            /** @var object $widget */
+            $widget = app($widgetClass);
+
             /** @var mixed $heading */
-            $heading = $widget->getHeading();
+            $heading = $method->isStatic()
+                ? $method->invoke(null)
+                : $method->invoke($widget);
 
             if (filled($heading) && is_string($heading)) {
                 return $heading;
@@ -287,14 +311,11 @@ final class PermissionResolver
             if ($heading instanceof Htmlable) {
                 return $heading->toHtml();
             }
+        } catch (Throwable) {
+            return null;
         }
 
-        // Generate label from class name as last resort
-        return str(class_basename($widgetClass))
-            ->kebab()
-            ->replace('-', ' ')
-            ->title()
-            ->toString();
+        return null;
     }
 
     /**
