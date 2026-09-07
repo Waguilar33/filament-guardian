@@ -136,8 +136,13 @@ class FilamentGuardian
             $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
             $rule->where('guard_name', $panel->getAuthGuard());
 
-            if (Filament::hasTenancy()) {
-                $rule->where(app(PermissionRegistrar::class)->teamsKey, getPermissionsTeamId());
+            $registrar = app(PermissionRegistrar::class);
+
+            if ($registrar->teams) {
+                // Scope to the tenant the panel is serving, or to no tenant at all on a
+                // panel without tenancy. Skipping the clause there would make a role
+                // name collide with any tenant's role of the same name.
+                $rule->where($registrar->teamsKey, Filament::hasTenancy() ? getPermissionsTeamId() : null);
             }
 
             return $rule;

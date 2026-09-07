@@ -64,6 +64,16 @@ abstract class BaseRoleResource extends Resource
             ->whereRaw('guard_name = ?', [$panel?->getAuthGuard()])
             ->with('permissions');
 
+        $registrar = app(PermissionRegistrar::class);
+
+        // A panel without tenancy owns the roles that belong to no tenant. Filament's
+        // tenancy scope only covers panels that have tenancy, so without this a
+        // non-tenant panel sharing a guard with a tenant panel lists every tenant's
+        // roles as though they were its own.
+        if ($registrar->teams && ! ($panel?->hasTenancy() ?? false)) {
+            $query->whereNull($registrar->teamsKey);
+        }
+
         return $query;
     }
 
