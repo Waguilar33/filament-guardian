@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Waguilar\FilamentGuardian\Commands;
 
+use Filament\Facades\Filament;
+use Illuminate\Auth\EloquentUserProvider;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
@@ -21,7 +24,8 @@ class CreateUserCommand extends Command
     public $signature = 'guardian:create-user
         {--name= : User name}
         {--email= : User email}
-        {--password= : User password}';
+        {--password= : User password}
+        {--panel= : Create the user for this panel\'s auth guard (defaults to the default panel)}';
 
     /** @var string */
     public $description = 'Create a new user';
@@ -52,10 +56,32 @@ class CreateUserCommand extends Command
     }
 
     /**
+     * The user model behind the panel's auth guard.
+     *
+     * Resolved through the guard rather than assuming the 'users' provider, so an
+     * app whose panels authenticate different models creates the right one.
+     *
      * @return class-string<Model>
      */
     protected function getUserModel(): string
     {
+        /** @var string|null $panelId */
+        $panelId = $this->option('panel');
+
+        $panel = $panelId !== null
+            ? Filament::getPanel($panelId)
+            : Filament::getDefaultPanel();
+
+        $guard = Auth::guard($panel->getAuthGuard());
+        $provider = method_exists($guard, 'getProvider') ? $guard->getProvider() : null;
+
+        if ($provider instanceof EloquentUserProvider) {
+            /** @var class-string<Model> $model */
+            $model = $provider->getModel();
+
+            return $model;
+        }
+
         /** @var class-string<Model> $model */
         $model = config('auth.providers.users.model');
 

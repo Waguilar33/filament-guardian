@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Waguilar\FilamentGuardian;
 
 use Closure;
-use Exception;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -43,13 +42,10 @@ class FilamentGuardian
 
         if ($panel === null && $panelId === null) {
             foreach (Filament::getPanels() as $candidate) {
-                try {
-                    $plugin = $candidate->getPlugin('filament-guardian');
-                    if ($plugin instanceof FilamentGuardianPlugin) {
-                        return $plugin;
-                    }
-                } catch (Exception) {
-                    continue;
+                $plugin = $this->guardianPluginOn($candidate);
+
+                if ($plugin instanceof FilamentGuardianPlugin) {
+                    return $plugin;
                 }
             }
 
@@ -60,13 +56,18 @@ class FilamentGuardian
             return null;
         }
 
-        try {
-            $plugin = $panel->getPlugin('filament-guardian');
+        return $this->guardianPluginOn($panel);
+    }
 
-            return $plugin instanceof FilamentGuardianPlugin ? $plugin : null;
-        } catch (Exception) {
+    private function guardianPluginOn(Panel $panel): ?FilamentGuardianPlugin
+    {
+        if (! $panel->hasPlugin('filament-guardian')) {
             return null;
         }
+
+        $plugin = $panel->getPlugin('filament-guardian');
+
+        return $plugin instanceof FilamentGuardianPlugin ? $plugin : null;
     }
 
     private function userUsesHasRolesTrait(mixed $user): bool

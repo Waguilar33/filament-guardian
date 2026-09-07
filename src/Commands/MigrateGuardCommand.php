@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
-use Spatie\Permission\Models\Permission as SpatiePermission;
-use Spatie\Permission\Models\Role as SpatieRole;
+use Spatie\Permission\Contracts\Permission as PermissionContract;
+use Spatie\Permission\Contracts\Role as RoleContract;
 use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -221,29 +221,29 @@ class MigrateGuardCommand extends Command
         return blank($only) || $only === $what;
     }
 
-    /** @return EloquentCollection<int, SpatiePermission> */
+    /** @return EloquentCollection<int, Model&PermissionContract> */
     protected function sourcePermissions(): EloquentCollection
     {
-        /** @var class-string<SpatiePermission> $permissionClass */
+        /** @var class-string<Model&PermissionContract> $permissionClass */
         $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
 
-        /** @var EloquentCollection<int, SpatiePermission> */
+        /** @var EloquentCollection<int, Model&PermissionContract> */
         return $permissionClass::query()->whereRaw('guard_name = ?', [$this->from])->get();
     }
 
-    /** @return EloquentCollection<int, SpatieRole> */
+    /** @return EloquentCollection<int, Model&RoleContract> */
     protected function sourceRoles(): EloquentCollection
     {
-        /** @var class-string<SpatieRole> $roleClass */
+        /** @var class-string<Model&RoleContract> $roleClass */
         $roleClass = app(PermissionRegistrar::class)->getRoleClass();
 
-        /** @var EloquentCollection<int, SpatieRole> */
+        /** @var EloquentCollection<int, Model&RoleContract> */
         return $roleClass::query()->whereRaw('guard_name = ?', [$this->from])->get();
     }
 
     /**
-     * @param  EloquentCollection<int, SpatiePermission>  $permissions
-     * @param  EloquentCollection<int, SpatieRole>  $roles
+     * @param  EloquentCollection<int, Model&PermissionContract>  $permissions
+     * @param  EloquentCollection<int, Model&RoleContract>  $roles
      * @return array{permissions?: array<int, string>, roles?: array<int, string>}
      */
     protected function findConflicts(EloquentCollection $permissions, EloquentCollection $roles): array
@@ -251,14 +251,19 @@ class MigrateGuardCommand extends Command
         $conflicts = [];
 
         $permissionConflicts = $permissions
-            ->filter(fn (SpatiePermission $permission): bool => $this->findTargetPermission($permission) instanceof SpatiePermission)
-            ->map(fn (SpatiePermission $permission): string => $permission->name)
+            ->filter(fn (Model $permission): bool => $this->findTargetPermission($permission) !== null)
+            ->map(function (Model $permission): string {
+                /** @var string $name */
+                $name = $permission->getAttribute('name');
+
+                return $name;
+            })
             ->values()
             ->all();
 
         $roleConflicts = $roles
-            ->filter(fn (SpatieRole $role): bool => $this->findTargetRole($role) instanceof SpatieRole)
-            ->map(fn (SpatieRole $role): string => $this->describeRole($role))
+            ->filter(fn (Model $role): bool => $this->findTargetRole($role) !== null)
+            ->map(fn (Model $role): string => $this->describeRole($role))
             ->values()
             ->all();
 
@@ -273,25 +278,33 @@ class MigrateGuardCommand extends Command
         return $conflicts;
     }
 
-    protected function findTargetPermission(SpatiePermission $source): ?SpatiePermission
+    /**
+     * @param  Model&PermissionContract  $source
+     * @return (Model&PermissionContract)|null
+     */
+    protected function findTargetPermission(Model $source): ?Model
     {
-        /** @var class-string<SpatiePermission> $permissionClass */
+        /** @var class-string<Model&PermissionContract> $permissionClass */
         $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
 
-        /** @var SpatiePermission|null */
+        /** @var (Model&PermissionContract)|null */
         return $permissionClass::query()
-            ->whereRaw('name = ?', [$source->name])
+            ->whereRaw('name = ?', [$source->getAttribute('name')])
             ->whereRaw('guard_name = ?', [$this->to])
             ->first();
     }
 
-    protected function findTargetRole(SpatieRole $source): ?SpatieRole
+    /**
+     * @param  Model&RoleContract  $source
+     * @return (Model&RoleContract)|null
+     */
+    protected function findTargetRole(Model $source): ?Model
     {
-        /** @var class-string<SpatieRole> $roleClass */
+        /** @var class-string<Model&RoleContract> $roleClass */
         $roleClass = app(PermissionRegistrar::class)->getRoleClass();
 
         $query = $roleClass::query()
-            ->whereRaw('name = ?', [$source->name])
+            ->whereRaw('name = ?', [$source->getAttribute('name')])
             ->whereRaw('guard_name = ?', [$this->to]);
 
         if ($this->teamsEnabled()) {
@@ -299,12 +312,12 @@ class MigrateGuardCommand extends Command
             $query->where($teamKey, $source->getAttribute($teamKey));
         }
 
-        /** @var SpatieRole|null */
+        /** @var (Model&RoleContract)|null */
         return $query->first();
     }
 
     /**
-     * @param  EloquentCollection<int, SpatiePermission>  $permissions
+     * @param  EloquentCollection<int, Model&PermissionContract>  $permissions
      */
     protected function migratePermissions(EloquentCollection $permissions): void
     {
@@ -320,7 +333,7 @@ class MigrateGuardCommand extends Command
                 );
             }
 
-            if (! $target instanceof SpatiePermission) {
+            if ($target === null) {
                 $source->setAttribute('guard_name', $this->to);
                 $source->save();
 
@@ -329,7 +342,9 @@ class MigrateGuardCommand extends Command
                 continue;
             }
 
-            $this->guardMergeIsAllowed((string) $source->name);
+            /** @var string $sourceName */
+            $sourceName = $source->getAttribute('name');
+            $this->guardMergeIsAllowed($sourceName);
             $this->repointPermission($source, $target);
             $this->deleteRow($source);
 
@@ -382,7 +397,11 @@ class MigrateGuardCommand extends Command
      * Point every reference to the source permission at the target permission,
      * dropping the source's row wherever the target already occupies the slot.
      */
-    protected function repointPermission(SpatiePermission $source, SpatiePermission $target): void
+    /**
+     * @param  Model&PermissionContract  $source
+     * @param  Model&PermissionContract  $target
+     */
+    protected function repointPermission(Model $source, Model $target): void
     {
         $permissionKey = $this->permissionPivotKey();
 
@@ -418,7 +437,7 @@ class MigrateGuardCommand extends Command
     }
 
     /**
-     * @param  EloquentCollection<int, SpatieRole>  $roles
+     * @param  EloquentCollection<int, Model&RoleContract>  $roles
      */
     protected function migrateRoles(EloquentCollection $roles): void
     {
@@ -434,7 +453,7 @@ class MigrateGuardCommand extends Command
                 );
             }
 
-            if (! $target instanceof SpatieRole) {
+            if ($target === null) {
                 $source->setAttribute('guard_name', $this->to);
                 $source->save();
 
@@ -458,7 +477,11 @@ class MigrateGuardCommand extends Command
      * pass: merging permissions can leave both roles pointing at the same
      * permission id, which only collides once the roles themselves collapse.
      */
-    protected function repointRole(SpatieRole $source, SpatieRole $target): void
+    /**
+     * @param  Model&RoleContract  $source
+     * @param  Model&RoleContract  $target
+     */
+    protected function repointRole(Model $source, Model $target): void
     {
         $roleKey = $this->rolePivotKey();
 
@@ -528,8 +551,8 @@ class MigrateGuardCommand extends Command
     }
 
     /**
-     * @param  EloquentCollection<int, SpatiePermission>  $permissions
-     * @param  EloquentCollection<int, SpatieRole>  $roles
+     * @param  EloquentCollection<int, Model&PermissionContract>  $permissions
+     * @param  EloquentCollection<int, Model&RoleContract>  $roles
      * @param  array{permissions?: array<int, string>, roles?: array<int, string>}  $conflicts
      */
     protected function reportPlan(EloquentCollection $permissions, EloquentCollection $roles, array $conflicts): void
@@ -638,17 +661,21 @@ class MigrateGuardCommand extends Command
         }
     }
 
-    protected function describeRole(SpatieRole $role): string
+    /** @param  Model&RoleContract  $role */
+    protected function describeRole(Model $role): string
     {
+        /** @var string $name */
+        $name = $role->getAttribute('name');
+
         if (! $this->teamsEnabled()) {
-            return $role->name;
+            return $name;
         }
 
         $teamKey = $this->teamKey();
         /** @var int|string|null $team */
         $team = $role->getAttribute($teamKey);
 
-        return "{$role->name} ({$teamKey}=" . ($team ?? 'null') . ')';
+        return "{$name} ({$teamKey}=" . ($team ?? 'null') . ')';
     }
 
     protected function teamsEnabled(): bool

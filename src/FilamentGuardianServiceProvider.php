@@ -152,6 +152,10 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
 
         $policyClass = ResourcePolicyDetector::getPolicyNamespace() . '\\' . class_basename($roleClass) . 'Policy';
 
+        if (! class_exists($policyClass)) {
+            return;
+        }
+
         Gate::policy($roleClass, $policyClass);
     }
 

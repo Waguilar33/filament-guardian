@@ -8,20 +8,17 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
-use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Resources\RelationManagers\RelationGroup;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Resources\RelationManagers\RelationManagerConfiguration;
 use Illuminate\Support\Collection;
-use RuntimeException;
 use Spatie\Permission\Contracts\Role;
 use Waguilar\FilamentGuardian\Base\Roles\Pages\Concerns\HasGuardianContentTabs;
 use Waguilar\FilamentGuardian\Concerns\SyncsPermissions;
 use Waguilar\FilamentGuardian\Facades\Guardian;
-use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
-use Waguilar\FilamentGuardian\Support\PermissionResolver;
+use Waguilar\FilamentGuardian\Support\RolePermissionData;
 
 abstract class BaseEditRole extends EditRecord
 {
@@ -93,9 +90,10 @@ abstract class BaseEditRole extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $panel = Filament::getCurrentPanel() ?? throw new RuntimeException('No Filament panel is currently active.');
-        $keyBuilder = FilamentGuardianPlugin::get()->getKeyBuilder();
-        $resolver = new PermissionResolver($panel, $panel->getAuthGuard(), $keyBuilder);
+        // RolePermissionData caches a resolver per panel for the request, and the
+        // form schema has already built one; a second would repeat the permission
+        // query and the whole reflection pass over the panel's components.
+        $resolver = RolePermissionData::make()->getResolver();
 
         $record = $this->record;
         if (! $record instanceof Role) {
@@ -114,27 +112,13 @@ abstract class BaseEditRole extends EditRecord
         // Populate resource permission fields
         foreach ($resourcePermissions as $subject => $permissions) {
             $fieldName = 'resource_' . mb_strtolower($subject) . '_permissions';
-            $selectAllName = 'select_all_resource_' . mb_strtolower($subject);
 
-            $selected = $permissions->intersect($rolePermissions)->values()->all();
-            $data[$fieldName] = $selected;
-            $data[$selectAllName] = count($selected) === $permissions->count() && $permissions->count() > 0;
+            $data[$fieldName] = $permissions->intersect($rolePermissions)->values()->all();
         }
 
-        // Populate page permissions
-        $selectedPages = $pagePermissions->intersect($rolePermissions)->values()->all();
-        $data['page_permissions'] = $selectedPages;
-        $data['select_all_pages'] = count($selectedPages) === $pagePermissions->count() && $pagePermissions->count() > 0;
-
-        // Populate widget permissions
-        $selectedWidgets = $widgetPermissions->intersect($rolePermissions)->values()->all();
-        $data['widget_permissions'] = $selectedWidgets;
-        $data['select_all_widgets'] = count($selectedWidgets) === $widgetPermissions->count() && $widgetPermissions->count() > 0;
-
-        // Populate custom permissions
-        $selectedCustom = $customPermissions->intersect($rolePermissions)->values()->all();
-        $data['custom_permissions'] = $selectedCustom;
-        $data['select_all_custom'] = count($selectedCustom) === $customPermissions->count() && $customPermissions->count() > 0;
+        $data['page_permissions'] = $pagePermissions->intersect($rolePermissions)->values()->all();
+        $data['widget_permissions'] = $widgetPermissions->intersect($rolePermissions)->values()->all();
+        $data['custom_permissions'] = $customPermissions->intersect($rolePermissions)->values()->all();
 
         return $data;
     }

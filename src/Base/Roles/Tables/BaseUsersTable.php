@@ -12,9 +12,11 @@ use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Gate;
+use Spatie\Permission\PermissionRegistrar;
 
 class BaseUsersTable
 {
@@ -38,22 +40,16 @@ class BaseUsersTable
                     ->authorize(function (RelationManager $livewire): bool {
                         return self::canUpdate($livewire->getOwnerRecord());
                     })
-                    ->action(function (array $data, Table $table): void {
-                        /** @var array<int|string> $userIds */
-                        $userIds = (array) ($data['recordId'] ?? $data['recordIds'] ?? []);
-
-                        $pivotData = [];
-                        $tenant = Filament::getTenant();
-
-                        if ($tenant !== null) {
-                            /** @var string $teamForeignKey */
-                            $teamForeignKey = config('permission.column_names.team_foreign_key', 'team_id');
-                            $pivotData[$teamForeignKey] = $tenant->getKey();
+                    // Spatie's Role::users() is a bare morphedByMany with no pivot
+                    // columns declared, so Filament has none to carry and cannot write
+                    // the team key. using() supplies it while leaving Filament to
+                    // resolve the records and run its own before/after hooks.
+                    ->using(function (BelongsToMany $relationship, Model | EloquentCollection | null $record): void {
+                        if ($record === null) {
+                            return;
                         }
 
-                        /** @var BelongsToMany<*, *, *> $relationship */
-                        $relationship = $table->getRelationship();
-                        $relationship->attach($userIds, $pivotData);
+                        $relationship->attach($record, self::attachPivotData());
                     }),
             ])
             ->recordActions([
@@ -79,5 +75,24 @@ class BaseUsersTable
     public static function canUpdate(Model $ownerRecord): bool
     {
         return Gate::forUser(Filament::auth()->user())->check('update', $ownerRecord);
+    }
+
+    /**
+     * The pivot columns Spatie expects on a role assignment.
+     *
+     * @return array<string, mixed>
+     */
+    protected static function attachPivotData(): array
+    {
+        $registrar = app(PermissionRegistrar::class);
+
+        if (! $registrar->teams) {
+            return [];
+        }
+
+        /** @var string $teamKey */
+        $teamKey = $registrar->teamsKey;
+
+        return [$teamKey => getPermissionsTeamId()];
     }
 }

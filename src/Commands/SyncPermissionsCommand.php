@@ -483,8 +483,11 @@ class SyncPermissionsCommand extends Command
         );
 
         foreach ($orphans as $orphan) {
-            $this->detachPermission($orphan);
-            $orphan->delete();
+            // forceDelete() rather than delete(): Spatie's deleting hook clears the
+            // role and user pivots itself, but skips that work on a soft-deleting
+            // custom model unless the delete is forced -- and a soft-deleted row would
+            // keep occupying the (name, guard_name) unique index, breaking the next sync.
+            $orphan->forceDelete();
             $this->stats[$guard]['deleted']++;
 
             if ($this->output->isVerbose()) {
@@ -493,21 +496,6 @@ class SyncPermissionsCommand extends Command
         }
 
         return true;
-    }
-
-    /**
-     * Detach a permission from every role and user before deleting it, so the
-     * pivot rows are cleaned up even on databases that don't enforce the
-     * foreign-key cascade Spatie's migration relies on (e.g. SQLite without
-     * the pragma, or MyISAM tables).
-     */
-    protected function detachPermission(Permission $permission): void
-    {
-        $permission->roles()->detach();
-
-        if ($permission instanceof SpatiePermission) {
-            $permission->users()->detach();
-        }
     }
 
     /**

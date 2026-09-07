@@ -135,6 +135,14 @@ final class RolePermissionData
     }
 
     /**
+     * The resolver backing this instance, already warmed for the current panel.
+     */
+    public function getResolver(): PermissionResolver
+    {
+        return $this->resolver;
+    }
+
+    /**
      * Check if there are any permissions to display.
      */
     public function hasPermissions(): bool
