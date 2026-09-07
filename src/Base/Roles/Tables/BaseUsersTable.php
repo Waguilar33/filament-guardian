@@ -12,7 +12,6 @@ use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Gate;
@@ -42,14 +41,11 @@ class BaseUsersTable
                     })
                     // Spatie's Role::users() is a bare morphedByMany with no pivot
                     // columns declared, so Filament has none to carry and cannot write
-                    // the team key. using() supplies it while leaving Filament to
-                    // resolve the records and run its own before/after hooks.
-                    ->using(function (BelongsToMany $relationship, Model | EloquentCollection | null $record): void {
-                        if ($record === null) {
-                            return;
-                        }
-
-                        $relationship->attach($record, self::attachPivotData());
+                    // the team key. using() supplies it. The records come from the
+                    // form state rather than an injected $record, which Filament only
+                    // sets on the action for a single selection.
+                    ->using(function (BelongsToMany $relationship, array $data): void {
+                        $relationship->attach($data['recordId'], self::attachPivotData());
                     }),
             ])
             ->recordActions([
