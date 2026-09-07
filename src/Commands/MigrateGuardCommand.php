@@ -78,8 +78,7 @@ class MigrateGuardCommand extends Command
         if ($this->mode === 'move' && $conflicts !== []) {
             $this->reportConflicts($conflicts);
 
-            // A dry run wrote nothing, so it has not failed -- reporting the
-            // conflicts *is* the result. Only a real run exits non-zero.
+            // A dry run wrote nothing, so reporting the conflicts is its result, not a failure.
             return $this->option('dry-run') ? self::SUCCESS : self::FAILURE;
         }
 
@@ -97,15 +96,13 @@ class MigrateGuardCommand extends Command
 
         try {
             DB::transaction(function () use ($permissions, $roles): void {
-                // Permissions first. Merging them can collapse two role_has_permissions
-                // rows into one, which is a collision the roles pass has to clean up
-                // afterwards -- doing roles first would miss it.
+                // Permissions first: merging them can collapse two role_has_permissions
+                // rows into one, a collision only the roles pass can then clean up.
                 $this->migratePermissions($permissions);
                 $this->migrateRoles($roles);
             });
         } catch (RuntimeException $exception) {
-            // Everything mutating ran inside the transaction, so the database is
-            // untouched. Say that plainly instead of dumping a stack trace.
+            // Everything mutating ran inside the transaction, so nothing was written.
             $this->newLine();
             $this->components->error($exception->getMessage());
             $this->components->info('The database was not changed.');
@@ -164,9 +161,8 @@ class MigrateGuardCommand extends Command
         $guards = config('auth.guards');
 
         if ($guards !== null && ! array_key_exists($to, $guards)) {
-            // Migrating onto a guard Laravel does not know about leaves an
-            // authorization system that throws on hasPermissionTo() and assignRole().
-            // Refuse rather than report success on a broken result.
+            // Migrating onto a guard Laravel does not know about leaves hasPermissionTo()
+            // and assignRole() throwing, so refuse rather than report success.
             $this->components->error(
                 "Guard '{$to}' is not configured in config/auth.php. Register it there first, "
                 . 'or pass --allow-unregistered-guard if you are adding it in the same deploy.'
@@ -225,11 +221,7 @@ class MigrateGuardCommand extends Command
         return blank($only) || $only === $what;
     }
 
-    /**
-     * Permissions belonging to the source guard.
-     *
-     * @return EloquentCollection<int, SpatiePermission>
-     */
+    /** @return EloquentCollection<int, SpatiePermission> */
     protected function sourcePermissions(): EloquentCollection
     {
         /** @var class-string<SpatiePermission> $permissionClass */
@@ -239,11 +231,7 @@ class MigrateGuardCommand extends Command
         return $permissionClass::query()->whereRaw('guard_name = ?', [$this->from])->get();
     }
 
-    /**
-     * Roles belonging to the source guard.
-     *
-     * @return EloquentCollection<int, SpatieRole>
-     */
+    /** @return EloquentCollection<int, SpatieRole> */
     protected function sourceRoles(): EloquentCollection
     {
         /** @var class-string<SpatieRole> $roleClass */
@@ -254,8 +242,6 @@ class MigrateGuardCommand extends Command
     }
 
     /**
-     * Names that already exist under the target guard.
-     *
      * @param  EloquentCollection<int, SpatiePermission>  $permissions
      * @param  EloquentCollection<int, SpatieRole>  $roles
      * @return array{permissions?: array<int, string>, roles?: array<int, string>}
@@ -382,12 +368,10 @@ class MigrateGuardCommand extends Command
     }
 
     /**
-     * Delete a migrated row for good.
-     *
-     * forceDelete() rather than delete(): on a plain model it is delete(), and on a
-     * custom Role or Permission using SoftDeletes it is the only thing that both
-     * frees the unique index and satisfies Spatie's own deleting hook, which skips
-     * its pivot cleanup unless isForceDeleting() is true.
+     * forceDelete() rather than delete(): on a plain model the two are identical, but
+     * a custom Role or Permission using SoftDeletes would otherwise keep occupying the
+     * unique index, and Spatie's deleting hook skips its pivot cleanup unless
+     * isForceDeleting() is true.
      */
     protected function deleteRow(Model $row): void
     {
@@ -402,7 +386,6 @@ class MigrateGuardCommand extends Command
     {
         $permissionKey = $this->permissionPivotKey();
 
-        // role_has_permissions: a role holding both rows would collide on (permission, role).
         $this->dedupe(
             $this->roleHasPermissionsTable(),
             $permissionKey,
@@ -415,7 +398,6 @@ class MigrateGuardCommand extends Command
             ->where($permissionKey, $source->getKey())
             ->update([$permissionKey => $target->getKey()]);
 
-        // model_has_permissions: a user holding both rows would collide on (permission, model).
         $modelColumns = [$this->morphKey(), 'model_type'];
 
         if ($this->teamsEnabled()) {

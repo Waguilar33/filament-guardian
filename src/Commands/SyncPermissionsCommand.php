@@ -43,10 +43,9 @@ class SyncPermissionsCommand extends Command
 
     public function handle(): int
     {
-        // syncPanel() switches the current panel as it goes. Restore whatever was
-        // current on the way out so the rest of the process -- a seeder calling
-        // Artisan::call(), the next test in a shared process -- is not left with an
-        // arbitrary panel silently current.
+        // syncPanel() switches the current panel as it goes; restore it so a seeder
+        // calling Artisan::call() or the next test in the process is not left with an
+        // arbitrary panel current.
         $previousPanel = Filament::getCurrentPanel();
 
         try {
@@ -159,8 +158,7 @@ class SyncPermissionsCommand extends Command
             return;
         }
 
-        // The overlap that got us here means --mode=move would refuse on those
-        // names, so point at merge whenever this target is the one that overlaps.
+        // --mode=move would refuse on the overlapping names that got us here.
         $mode = $this->guardsShareNames($source, $target) ? 'merge' : 'move';
 
         $this->components->info('Move them with:');

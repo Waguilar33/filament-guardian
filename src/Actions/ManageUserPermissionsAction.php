@@ -174,11 +174,9 @@ final class ManageUserPermissionsAction
             fn (SpatiePermission $permission): bool => in_array($permission->getKey(), $currentKeys, true)
         );
 
-        // Grant before revoke, inside a transaction. Spatie's syncPermissions()
-        // validates the whole set before it detaches anything; doing the revoke
-        // first would commit the deletes and only then discover that the grant is
-        // invalid -- losing the permissions the user already had. The two sets are
-        // disjoint by construction, so the end state is the same either way.
+        // Grant first: an invalid grant must throw before anything is detached, or a
+        // failed save leaves the user with nothing. The two sets are disjoint, so the
+        // order does not change the result.
         DB::transaction(function () use ($record, $toGrant, $toRevoke): void {
             if ($toGrant->isNotEmpty()) {
                 ([$record, 'givePermissionTo'])($toGrant->values()->all()); // @phpstan-ignore callable.nonCallable
@@ -206,10 +204,10 @@ final class ManageUserPermissionsAction
     }
 
     /**
-     * Get permissions inherited from the user's roles, for the given guard only.
+     * Permissions inherited from the user's roles under the given guard.
      *
-     * A role belonging to another guard grants permissions that this panel never
-     * checks, so its permissions must not be treated as inherited here.
+     * Another guard's roles grant permissions this panel never checks, so they do
+     * not count as inherited here.
      *
      * @return Collection<int, string>
      */

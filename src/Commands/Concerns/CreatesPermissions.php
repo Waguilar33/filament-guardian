@@ -13,22 +13,14 @@ trait CreatesPermissions
     /**
      * Existing permission names for the current run, keyed by guard then name.
      *
-     * A sync calls createPermission() once per discovered key, and asking the
-     * database "does this one exist?" every time is one query per permission. The
-     * command already knows it owns the permission table for the guards it syncs,
-     * so it reads the guard's names once and keeps the answer.
-     *
-     * Scoped to a single run: Artisan reuses command instances within a process, so
-     * a second Artisan::call() would otherwise trust names read before the first
-     * one -- and silently skip re-creating anything deleted in between.
+     * Must be cleared per run: Artisan reuses command instances within a process, so
+     * a second Artisan::call() would trust names read before the first and silently
+     * skip re-creating anything deleted in between.
      *
      * @var array<string, array<string, true>>
      */
     private array $existingPermissionNames = [];
 
-    /**
-     * Forget the permission names read during a previous run of this command.
-     */
     protected function forgetExistingPermissionNames(): void
     {
         $this->existingPermissionNames = [];
@@ -50,12 +42,10 @@ trait CreatesPermissions
             ];
         }
 
-        // query()->create() rather than the model's static create(): the static one
-        // re-reads Spatie's permission cache to raise PermissionAlreadyExists, and
-        // that cache was just invalidated by the previous insert -- so in a loop it
-        // reloads the whole table per permission. This is the same call Spatie's own
-        // findOrCreate() makes, and it still fires the model events their
-        // cache-forget hook relies on.
+        // Not the model's static create(): it re-reads Spatie's permission cache to
+        // raise PermissionAlreadyExists, and the previous insert just invalidated that
+        // cache, so in a loop it reloads the whole table per permission. Spatie's own
+        // findOrCreate() calls query()->create() for the same reason.
         $this->getPermissionModel()::query()->create([
             'name' => $name,
             'guard_name' => $guard,

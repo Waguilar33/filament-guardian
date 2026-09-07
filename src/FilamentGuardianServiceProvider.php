@@ -123,14 +123,11 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
                 ], 'filament-guardian-stubs');
             }
 
-            // Fresh installs: sets up the pivot tables for mixed tenant/non-tenant panels.
             $this->publishes([
                 __DIR__ . '/../database/migrations/make_spatie_team_column_nullable.php.stub' => database_path('migrations/' . date('Y_m_d_His') . '_make_spatie_team_column_nullable.php'),
             ], 'filament-guardian-multitenancy');
 
-            // Existing installs only: corrects the model_has_permissions key left by
-            // an earlier version of the migration above. Published under its own tag
-            // so a fresh install does not run both.
+            // Its own tag so a fresh install, which no longer needs it, does not run it.
             $this->publishes([
                 __DIR__ . '/../database/migrations/drop_model_has_permissions_primary_key.php.stub' => database_path('migrations/' . date('Y_m_d_His', strtotime('+1 second')) . '_drop_model_has_permissions_primary_key.php'),
             ], 'filament-guardian-multitenancy-fix');

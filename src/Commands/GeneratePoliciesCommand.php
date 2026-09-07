@@ -41,9 +41,8 @@ class GeneratePoliciesCommand extends Command
 
     public function handle(): int
     {
-        // processPanel() switches the current panel. Restore whatever was current
-        // on the way out so the rest of the process is not left with an arbitrary
-        // panel silently current.
+        // processPanel() switches the current panel; restore it so the rest of the
+        // process is not left with an arbitrary panel current.
         $previousPanel = Filament::getCurrentPanel();
 
         try {
