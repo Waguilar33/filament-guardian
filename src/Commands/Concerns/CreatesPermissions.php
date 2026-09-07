@@ -69,7 +69,7 @@ trait CreatesPermissions
         if (! array_key_exists($guard, $this->existingPermissionNames)) {
             /** @var array<int, string> $names */
             $names = $this->getPermissionModel()::query()
-                ->whereRaw('guard_name = ?', [$guard])
+                ->where('guard_name', $guard)
                 ->pluck('name')
                 ->all();
 

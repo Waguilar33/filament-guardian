@@ -58,6 +58,9 @@ abstract class BaseRoleResource extends Resource
         $panel = Filament::getCurrentPanel();
 
         $query
+            // whereRaw because the model class is resolved at runtime: PHPStan runs with
+            // checkModelProperties, which cannot verify a column against a Model it cannot
+            // narrow. Every binding here is parameterised.
             ->whereRaw('guard_name = ?', [$panel?->getAuthGuard()])
             ->with('permissions');
 

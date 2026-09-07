@@ -91,17 +91,13 @@ class FilamentGuardian
         $roleClass = $registrar->getRoleClass();
 
         $query = $roleClass::query()
-            ->whereRaw('name = ?', [$this->getSuperAdminRoleName($panelId)])
-            ->whereRaw('guard_name = ?', [$guard]);
+            ->where('name', $this->getSuperAdminRoleName($panelId))
+            ->where('guard_name', $guard);
 
         if ($tenantId !== null) {
-            /** @var string $teamKey */
-            $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
-            $query->where($teamKey, $tenantId);
+            $query->where($registrar->teamsKey, $tenantId);
         } elseif ($registrar->teams) {
-            /** @var string $teamKey */
-            $teamKey = $registrar->teamsKey;
-            $query->where($teamKey, getPermissionsTeamId());
+            $query->where($registrar->teamsKey, getPermissionsTeamId());
         }
 
         return $query;
@@ -121,13 +117,9 @@ class FilamentGuardian
         ];
 
         if ($tenantId !== null) {
-            /** @var string $teamKey */
-            $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
-            $attributes[$teamKey] = $tenantId;
+            $attributes[$registrar->teamsKey] = $tenantId;
         } elseif ($registrar->teams) {
-            /** @var string $teamKey */
-            $teamKey = $registrar->teamsKey;
-            $attributes[$teamKey] = getPermissionsTeamId();
+            $attributes[$registrar->teamsKey] = getPermissionsTeamId();
         }
 
         return $attributes;
@@ -145,9 +137,7 @@ class FilamentGuardian
             $rule->where('guard_name', $panel->getAuthGuard());
 
             if (Filament::hasTenancy()) {
-                /** @var string $teamKey */
-                $teamKey = config('permission.column_names.team_foreign_key', 'team_id');
-                $rule->where($teamKey, getPermissionsTeamId());
+                $rule->where(app(PermissionRegistrar::class)->teamsKey, getPermissionsTeamId());
             }
 
             return $rule;

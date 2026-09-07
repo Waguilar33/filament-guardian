@@ -156,7 +156,7 @@ final class ManageUserPermissionsAction
         /** @var Collection<int, SpatiePermission> $selected */
         $selected = $permissionClass::query()
             ->whereIn('name', $selectedNames->unique()->values()->all())
-            ->whereRaw('guard_name = ?', [$guard])
+            ->where('guard_name', $guard)
             ->get();
 
         /** @var Collection<int, Permission> $current */

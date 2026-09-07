@@ -8,6 +8,7 @@ use Filament\Contracts\Plugin;
 use Filament\Panel;
 use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
+use Waguilar\FilamentGuardian\Base\Roles\BaseRoleResource;
 use Waguilar\FilamentGuardian\Concerns\HasContentTabs;
 use Waguilar\FilamentGuardian\Concerns\HasNavigation;
 use Waguilar\FilamentGuardian\Concerns\HasPermissionTabs;
@@ -75,13 +76,27 @@ class FilamentGuardianPlugin implements Plugin
         ]);
     }
 
+    /**
+     * Whether the panel already registers a role resource of its own.
+     *
+     * Matches a subclass of the package's base resource, or any class actually named
+     * RoleResource so a hand-written one still suppresses the bundled resource. A
+     * substring match on the joined class names would also claim, say, a
+     * `Resources\RoleResources\ThingResource`.
+     */
     protected function panelHasRoleResource(Panel $panel): bool
     {
-        return str(
-            collect($panel->getResources())
-                ->values()
-                ->join(',')
-        )->contains('\\RoleResource');
+        foreach ($panel->getResources() as $resource) {
+            if (is_subclass_of($resource, BaseRoleResource::class)) {
+                return true;
+            }
+
+            if (class_basename($resource) === 'RoleResource') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function boot(Panel $panel): void

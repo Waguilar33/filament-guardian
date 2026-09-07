@@ -140,8 +140,8 @@ class SyncPermissionsCommand extends Command
         $this->newLine();
 
         foreach ($orphaned as $guard) {
-            $permissionCount = $permissionClass::query()->whereRaw('guard_name = ?', [$guard])->count();
-            $roleCount = $roleClass::query()->whereRaw('guard_name = ?', [$guard])->count();
+            $permissionCount = $permissionClass::query()->where('guard_name', $guard)->count();
+            $roleCount = $roleClass::query()->where('guard_name', $guard)->count();
 
             $this->components->warn(
                 "Guard '{$guard}' has {$permissionCount} permission(s) and {$roleCount} role(s) but no panel uses it. "
@@ -174,9 +174,9 @@ class SyncPermissionsCommand extends Command
         $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
 
         return $permissionClass::query()
-            ->whereRaw('guard_name = ?', [$source])
+            ->where('guard_name', $source)
             ->whereIn('name', $permissionClass::query()
-                ->whereRaw('guard_name = ?', [$target])
+                ->where('guard_name', $target)
                 ->select('name'))
             ->exists();
     }
@@ -464,7 +464,7 @@ class SyncPermissionsCommand extends Command
 
         /** @var Collection<int, Permission> $orphans */
         $orphans = $permissionModel::query()
-            ->whereRaw('guard_name = ?', [$guard])
+            ->where('guard_name', $guard)
             ->whereNotIn('name', $expectedKeys)
             ->get();
 

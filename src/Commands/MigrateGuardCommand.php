@@ -180,7 +180,7 @@ class MigrateGuardCommand extends Command
             $teamKey = $this->teamKey();
 
             $this->components->error(
-                "config('permission.teams') is " . ($this->teamsEnabled() ? 'true' : 'false')
+                "Spatie's teams feature is " . ($this->teamsEnabled() ? 'enabled' : 'disabled')
                 . ', but the roles table ' . ($this->teamsEnabled() ? 'has no' : 'has a')
                 . " '{$teamKey}' column. Migrating under that mismatch would merge roles across teams. "
                 . 'Run `php artisan config:clear` and check your permission migration before retrying.'
@@ -199,7 +199,7 @@ class MigrateGuardCommand extends Command
     }
 
     /**
-     * Whether config('permission.teams') agrees with the roles table's schema.
+     * Whether Spatie's teams setting agrees with the roles table's schema.
      *
      * Toggling the config after the migration has run -- or a stale config cache --
      * silently drops the team filter when matching roles, which collapses two
@@ -228,6 +228,9 @@ class MigrateGuardCommand extends Command
         $permissionClass = app(PermissionRegistrar::class)->getPermissionClass();
 
         /** @var EloquentCollection<int, Model&PermissionContract> */
+        // whereRaw because the model class is resolved at runtime: PHPStan runs with
+        // checkModelProperties, which cannot verify a column against a Model it cannot
+        // narrow. Every binding here is parameterised.
         return $permissionClass::query()->whereRaw('guard_name = ?', [$this->from])->get();
     }
 
@@ -680,13 +683,12 @@ class MigrateGuardCommand extends Command
 
     protected function teamsEnabled(): bool
     {
-        return (bool) config('permission.teams', false);
+        return app(PermissionRegistrar::class)->teams;
     }
 
     protected function teamKey(): string
     {
-        /** @var string */
-        return config('permission.column_names.team_foreign_key', 'team_id');
+        return app(PermissionRegistrar::class)->teamsKey;
     }
 
     protected function morphKey(): string
@@ -697,14 +699,12 @@ class MigrateGuardCommand extends Command
 
     protected function rolePivotKey(): string
     {
-        /** @var string */
-        return config('permission.column_names.role_pivot_key') ?? 'role_id';
+        return app(PermissionRegistrar::class)->pivotRole;
     }
 
     protected function permissionPivotKey(): string
     {
-        /** @var string */
-        return config('permission.column_names.permission_pivot_key') ?? 'permission_id';
+        return app(PermissionRegistrar::class)->pivotPermission;
     }
 
     protected function roleHasPermissionsTable(): string

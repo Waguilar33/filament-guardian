@@ -139,7 +139,7 @@ final class PermissionResolver
 
         /** @var Collection<int, string> $permissions */
         $permissions = $permissionClass::query()
-            ->whereRaw('guard_name = ?', [$this->guard])
+            ->where('guard_name', $this->guard)
             ->pluck('name');
 
         $this->allPermissions = $permissions;
