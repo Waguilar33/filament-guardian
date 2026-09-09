@@ -233,6 +233,8 @@ class SyncPermissionsCommand extends Command
             return;
         }
 
+        $totalPermissions = 0;
+
         foreach ($resources as $resourceClass) {
             $subject = $this->getResourceSubject($resourceClass);
             $methods = $this->getResourceMethods($resourceClass);
@@ -240,12 +242,13 @@ class SyncPermissionsCommand extends Command
 
             foreach ($permissionKeys as $key) {
                 $this->syncPermission($key, $guard);
+                $totalPermissions++;
             }
         }
 
         $this->components->twoColumnDetail(
             '  Resources',
-            '<fg=gray>' . count($resources) . ' resource(s), ' . count($resources) * count($this->getResourceMethods($resources[0] ?? '')) . ' permission(s)</>'
+            '<fg=gray>' . count($resources) . ' resource(s), ' . $totalPermissions . ' permission(s)</>'
         );
     }
 

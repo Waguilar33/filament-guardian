@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Waguilar\FilamentGuardian\Commands\Concerns;
 
+use Waguilar\FilamentGuardian\Base\Roles\BaseRoleResource;
+
 trait ReadsResourceConfig
 {
     /**
@@ -11,7 +13,25 @@ trait ReadsResourceConfig
      */
     protected function getResourceMethods(string $resourceClass): array
     {
-        return $this->resolveMethods($this->getManagedResourceConfig($resourceClass));
+        $methods = $this->resolveMethods($this->getManagedResourceConfig($resourceClass));
+
+        return array_values(array_unique(array_merge(
+            $methods,
+            $this->getMembershipAbilities($resourceClass),
+        )));
+    }
+
+    /**
+     * Matched on the base class, not an FQCN: a published role resource lives in the
+     * consumer's own namespace.
+     *
+     * @return array<int, string>
+     */
+    protected function getMembershipAbilities(string $resourceClass): array
+    {
+        return is_subclass_of($resourceClass, BaseRoleResource::class)
+            ? ['attach', 'detach']
+            : [];
     }
 
     /**

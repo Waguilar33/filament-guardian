@@ -12,6 +12,7 @@ use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Gate;
@@ -37,7 +38,7 @@ class BaseUsersTable
                     ->preloadRecordSelect()
                     ->multiple()
                     ->authorize(function (RelationManager $livewire): bool {
-                        return self::canUpdate($livewire->getOwnerRecord());
+                        return self::canAttach($livewire->getOwnerRecord());
                     })
                     // Spatie's Role::users() is a bare morphedByMany with no pivot
                     // columns declared, so Filament has none to carry and cannot write
@@ -51,14 +52,14 @@ class BaseUsersTable
             ->recordActions([
                 DetachAction::make()
                     ->authorize(function (RelationManager $livewire): bool {
-                        return self::canUpdate($livewire->getOwnerRecord());
+                        return self::canDetach($livewire->getOwnerRecord());
                     }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DetachBulkAction::make()
                         ->authorize(function (RelationManager $livewire): bool {
-                            return self::canUpdate($livewire->getOwnerRecord());
+                            return self::canDetach($livewire->getOwnerRecord());
                         }),
                 ]),
             ]);
@@ -71,6 +72,34 @@ class BaseUsersTable
     public static function canUpdate(Model $ownerRecord): bool
     {
         return Gate::forUser(Filament::auth()->user())->check('update', $ownerRecord);
+    }
+
+    public static function canAttach(Model $ownerRecord): bool
+    {
+        return self::canManageMembership($ownerRecord, 'attach');
+    }
+
+    public static function canDetach(Model $ownerRecord): bool
+    {
+        return self::canManageMembership($ownerRecord, 'detach');
+    }
+
+    /**
+     * raw() rather than check(): it returns null when nothing defines the ability, so
+     * a RolePolicy predating attach/detach falls back to `update`.
+     */
+    protected static function canManageMembership(Model $ownerRecord, string $ability): bool
+    {
+        /** @var mixed $response */
+        $response = Gate::forUser(Filament::auth()->user())->raw($ability, $ownerRecord);
+
+        if ($response === null) {
+            return self::canUpdate($ownerRecord);
+        }
+
+        return $response instanceof Response
+            ? $response->allowed()
+            : (bool) $response;
     }
 
     /**

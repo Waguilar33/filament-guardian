@@ -98,6 +98,8 @@ return [
         'forceDeleteAny' => 'Purgar Varios',
         'replicate' => 'Duplicar',
         'reorder' => 'Reordenar',
+        'attach' => 'Asignar',
+        'detach' => 'Desasignar',
     ],
 
     /*

@@ -261,6 +261,15 @@ public function panel(Panel $panel): Panel
 }
 ```
 
+> **Important:** A panel with `->tenant()` requires `'teams' => true` in `config/permission.php`. The plugin throws at boot if it isn't:
+>
+> ```
+> Panel 'app' uses tenancy, but Spatie's teams feature is disabled.
+> Set 'teams' => true in config/permission.php and run the permission migration.
+> ```
+>
+> That setting is what adds the tenant column to Spatie's `roles` and pivot tables in the first place — with it off there is nowhere to record which tenant a role belongs to, and role names are unique across the whole table rather than per tenant. It's read when the migration runs, so turning it on afterwards means a schema change: roll the permission tables back and re-migrate, or write a migration that adds the column and swaps the unique constraint.
+
 ### 4. How role scoping works
 
 Once everything is set up, the plugin automatically filters roles and permissions based on two things: the panel's auth guard and the current tenant context.
@@ -338,13 +347,29 @@ class UsersRelationManager extends BaseUsersRelationManager
                 AttachAction::make()
                     ->recordSelectOptionsQuery(fn (Builder $query) => $query->admins())
                     ->preloadRecordSelect()
-                    ->multiple(),
+                    ->multiple()
+                    ->authorize(fn (RelationManager $livewire): bool => BaseUsersTable::canAttach($livewire->getOwnerRecord())),
             ]);
     }
 }
 ```
 
 `modifyQueryUsing` filters the users shown in the table. `recordSelectOptionsQuery` filters the users shown in the attach dropdown.
+
+> **Important:** `headerActions()` **replaces** the table's header actions rather than adding to them, so the Attach button you pass in starts with no authorization — re-apply `->authorize()` as above or the button is available to anyone who can see the page.
+>
+> On a **tenant** panel the bundled action also carries a `->using()` closure that writes the tenant key to Spatie's pivot, which a replacement drops. There, extend the table instead of replacing the action:
+>
+> ```php
+> class UsersTable extends BaseUsersTable
+> {
+>     public static function configure(Table $table): Table
+>     {
+>         return parent::configure($table)
+>             ->modifyQueryUsing(fn (Builder $query) => $query->admins());
+>     }
+> }
+> ```
 
 ## Super Admin
 
@@ -902,6 +927,34 @@ Pages and widgets each get a single permission by default — typically a `view`
 ```
 
 Filament's built-in Dashboard, AccountWidget, and FilamentInfoWidget are excluded by default — they're framework-level components that most apps don't need to permission-gate.
+
+### Role Membership Abilities
+
+Attaching and detaching users on a role's Users table is gated separately from editing the role itself — so you can let someone create and edit roles without letting them decide who holds those roles.
+
+| Permission | Gates |
+| --- | --- |
+| `Attach:Role` | The **Attach** button on the role's Users table |
+| `Detach:Role` | The **Detach** row action and the bulk detach action |
+
+The plugin owns the role resource, so `guardian:sync` creates both permissions for it automatically — including a resource you published with `filament-guardian:publish-role-resource` — and `guardian:policies` generates the matching methods:
+
+```php
+// app/Policies/RolePolicy.php
+public function attach(AuthUser $authUser, Role $role): bool
+{
+    return $authUser->can('Attach:Role', $this->getGuard());
+}
+
+public function detach(AuthUser $authUser, Role $role): bool
+{
+    return $authUser->can('Detach:Role', $this->getGuard());
+}
+```
+
+If `RolePolicy` defines neither method, membership falls back to `Update:Role` — so a hand-written or trimmed policy keeps working, and deleting the two methods is how you opt out. The permissions are created either way; they simply have no effect until the policy uses them.
+
+> **Important:** `attach` and `detach` receive the role record, so they're two-parameter policy methods. Don't add them to `policies.single_parameter_methods` — the generated signature would stop matching what the gate passes.
 
 ## Resource-Based Policies
 
@@ -1467,6 +1520,8 @@ Published classes extend base classes from the package. You only override what y
 | `BaseRoleForm` | Form schema with tabbed permissions |
 | `BaseRoleInfolist` | Infolist schema for view page |
 | `BaseRolesTable` | Table columns and record actions |
+| `BaseUsersRelationManager` | Users relation manager, and its `View:Role` visibility check |
+| `BaseUsersTable` | Users table columns and the attach/detach actions |
 
 ### 2. Example: Custom Table Actions
 
