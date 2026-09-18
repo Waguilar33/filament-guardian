@@ -299,16 +299,16 @@ trait HasNavigation
     public function getNavigationBadge(): ?string
     {
         if ($this->navigationBadge !== null) {
-            /** @var string|null $result */
+            /** @var string|int|null $result */
             $result = $this->evaluate($this->navigationBadge);
 
-            return $result;
+            return $result === null ? null : (string) $result;
         }
 
-        /** @var string|null $configValue */
+        /** @var string|int|null $configValue */
         $configValue = config('filament-guardian.role_resource.navigation.badge');
 
-        return $configValue;
+        return $configValue === null ? null : (string) $configValue;
     }
 
     /**
