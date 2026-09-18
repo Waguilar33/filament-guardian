@@ -1215,7 +1215,7 @@ php artisan migrate
 
 All configurable values resolve top-down — the first source that has a value wins.
 
-1. **Local override** — If you've published the RoleResource and declared a static property on your subclass (e.g. `protected static ?string $navigationIcon = 'heroicon-o-lock-closed'`), that value takes priority over everything else. This uses PHP late static binding, so the subclass declaration wins at the class level without any runtime checks.
+1. **Local override** — If you've published the RoleResource and declared a static property on your subclass (e.g. `protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-lock-closed'`), that value takes priority over everything else. This uses PHP late static binding, so the subclass declaration wins at the class level without any runtime checks.
 
 2. **Fluent API** — Values set via `FilamentGuardianPlugin::make()->navigationIcon(...)` in your panel provider. These are per-panel, so different panels can have different values independently.
 
