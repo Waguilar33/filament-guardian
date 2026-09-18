@@ -15,6 +15,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         php: [8.4, 8.3, 8.2]
         laravel: [12.*, 11.*]
+        filament: ['^4.0.4', '^5.0']
         stability: [prefer-lowest, prefer-stable]
         include:
           - laravel: 12.*
@@ -23,10 +24,13 @@ jobs:
             collision: 8.*
           - laravel: 11.*
             testbench: 9.*
-            carbon: 3.*
+            carbon: ^3.8.4
             collision: 8.*
+        exclude:
+          - os: windows-latest
+            filament: '^5.0'
 
-    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - F${{ matrix.filament }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
     steps:
       - name: Checkout code
@@ -45,8 +49,10 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
       - name: Install dependencies
+        # Composer skips advisory-flagged releases by default, lifting --prefer-lowest above the declared minimums.
         run: |
-          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" --no-interaction --no-update
+          composer config audit.block-insecure false
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" "filament/filament:${{ matrix.filament }}" --no-interaction --no-update
           composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
       - name: List Installed Dependencies
