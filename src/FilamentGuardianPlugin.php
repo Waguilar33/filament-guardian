@@ -84,8 +84,8 @@ class FilamentGuardianPlugin implements Plugin
                 RoleResource::class,
             ]);
 
-            // Registers the resource's pages as Livewire components. Already run once,
-            // and safe to repeat: everything it registers is keyed by name.
+            // Registers the resource's pages as Livewire components. Already run once, and safe to repeat
+            // from Filament 4.0.4, which moved the tenancy model observers from register() to boot().
             $panel->register();
         };
 

@@ -18,7 +18,7 @@ Works with **Filament v4 and v5**.
 
 - PHP 8.2+
 - Laravel 11+
-- Filament 4+
+- Filament 4.0.4+
 - Spatie Laravel Permission 6, 7, or 8
 
 ## Installation
