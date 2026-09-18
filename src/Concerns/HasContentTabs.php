@@ -8,7 +8,6 @@ use BackedEnum;
 use Closure;
 use Filament\Resources\Pages\Enums\ContentTabPosition;
 use Filament\Support\Concerns\EvaluatesClosures;
-use Illuminate\Contracts\Support\Htmlable;
 
 trait HasContentTabs
 {
@@ -22,7 +21,7 @@ trait HasContentTabs
 
     protected string | Closure | null $contentTabLabel = null;
 
-    protected string | BackedEnum | Htmlable | Closure | null $contentTabIcon = null;
+    protected string | BackedEnum | Closure | null $contentTabIcon = null;
 
     protected ContentTabPosition | string | Closure | null $contentTabPosition = null;
 
@@ -63,7 +62,7 @@ trait HasContentTabs
     }
 
     /** @api */
-    public function contentTabIcon(string | BackedEnum | Htmlable | Closure | null $icon): static
+    public function contentTabIcon(string | BackedEnum | Closure | null $icon): static
     {
         $this->contentTabIcon = $icon;
 
@@ -151,10 +150,10 @@ trait HasContentTabs
         return $configValue;
     }
 
-    public function getContentTabIcon(): string | BackedEnum | Htmlable | null
+    public function getContentTabIcon(): string | BackedEnum | null
     {
         if ($this->contentTabIcon !== null) {
-            /** @var string|BackedEnum|Htmlable|null $result */
+            /** @var string|BackedEnum|null $result */
             $result = $this->evaluate($this->contentTabIcon);
 
             return $result;
