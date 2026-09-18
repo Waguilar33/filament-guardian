@@ -8,7 +8,6 @@ use BackedEnum;
 use Closure;
 use Filament\Support\Concerns\EvaluatesClosures;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Contracts\Support\Htmlable;
 
 /**
  * Trait for configuring permission-related icons.
@@ -20,7 +19,7 @@ trait HasPermissionIcons
 {
     use EvaluatesClosures;
 
-    protected string | BackedEnum | Htmlable | Closure | false | null $searchIcon = null;
+    protected string | BackedEnum | Closure | false | null $searchIcon = null;
 
     protected string | BackedEnum | Closure | false | null $permissionAssignedIcon = null;
 
@@ -31,7 +30,7 @@ trait HasPermissionIcons
     /**
      * Set the icon for the search input. Pass `false` for no icon.
      */
-    public function searchIcon(string | BackedEnum | Htmlable | Closure | false | null $icon): static
+    public function searchIcon(string | BackedEnum | Closure | false | null $icon): static
     {
         $this->searchIcon = $icon;
 
@@ -41,10 +40,10 @@ trait HasPermissionIcons
     /**
      * Get the icon for the search input.
      */
-    public function getSearchIcon(): string | BackedEnum | Htmlable | null
+    public function getSearchIcon(): string | BackedEnum | null
     {
         if ($this->searchIcon !== null) {
-            /** @var string|BackedEnum|Htmlable|false $result */
+            /** @var string|BackedEnum|false $result */
             $result = $this->evaluate($this->searchIcon);
 
             if ($result === false) {
