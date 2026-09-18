@@ -16,6 +16,7 @@ use Waguilar\FilamentGuardian\Concerns\HasPermissionTabs;
 use Waguilar\FilamentGuardian\Concerns\HasSectionConfiguration;
 use Waguilar\FilamentGuardian\Http\Middleware\SetPermissionsTeam;
 use Waguilar\FilamentGuardian\Resources\Roles\RoleResource;
+use Waguilar\FilamentGuardian\Support\PanelComponents;
 use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
 
 class FilamentGuardianPlugin implements Plugin
@@ -125,7 +126,7 @@ class FilamentGuardianPlugin implements Plugin
      */
     protected function panelHasRoleResource(Panel $panel): bool
     {
-        foreach ($panel->getResources() as $resource) {
+        foreach (PanelComponents::resources($panel) as $resource) {
             if (is_subclass_of($resource, BaseRoleResource::class)) {
                 return true;
             }

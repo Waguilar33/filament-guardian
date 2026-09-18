@@ -417,7 +417,7 @@ final class PermissionResolver
 
         $subjects = [];
 
-        foreach ($this->panel->getResources() as $resource) {
+        foreach (PanelComponents::resources($this->panel) as $resource) {
             if (in_array($resource, $excluded, true)) {
                 continue;
             }
@@ -463,7 +463,7 @@ final class PermissionResolver
         $resourceModels = [];
         $seen = [];
 
-        foreach ($this->panel->getResources() as $resourceClass) {
+        foreach (PanelComponents::resources($this->panel) as $resourceClass) {
             if (in_array($resourceClass, $resourceExcluded, true)) {
                 continue;
             }
@@ -479,7 +479,7 @@ final class PermissionResolver
             }
         }
 
-        foreach ($this->panel->getResources() as $resourceClass) {
+        foreach (PanelComponents::resources($this->panel) as $resourceClass) {
             if (in_array($resourceClass, $resourceExcluded, true)) {
                 continue;
             }
@@ -626,7 +626,7 @@ final class PermissionResolver
 
         $subjects = [];
 
-        foreach ($this->panel->getPages() as $page) {
+        foreach (PanelComponents::pages($this->panel) as $page) {
             if (in_array($page, $excluded, true)) {
                 continue;
             }

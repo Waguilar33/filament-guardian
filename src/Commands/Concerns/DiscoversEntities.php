@@ -9,6 +9,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Resources\Resource;
 use Filament\Widgets\WidgetConfiguration;
 use Throwable;
+use Waguilar\FilamentGuardian\Support\PanelComponents;
 use Waguilar\FilamentGuardian\Support\RelationManagerDiscoverer;
 use Waguilar\FilamentGuardian\Support\RelationManagerPolicyDetector;
 use Waguilar\FilamentGuardian\Support\ResourcePolicyDetector;
@@ -28,7 +29,7 @@ trait DiscoversEntities
         $excluded = config('filament-guardian.resources.exclude', []);
 
         /** @var array<int, class-string<resource>> $resources */
-        $resources = collect($panel->getResources())
+        $resources = collect(PanelComponents::resources($panel))
             ->reject(fn (string $resource): bool => in_array($resource, $excluded, true))
             ->values()
             ->all();
@@ -47,7 +48,7 @@ trait DiscoversEntities
         $excluded = config('filament-guardian.pages.exclude', []);
 
         /** @var array<int, class-string> $pages */
-        $pages = collect($panel->getPages())
+        $pages = collect(PanelComponents::pages($panel))
             ->reject(fn (string $page): bool => in_array($page, $excluded, true))
             ->values()
             ->all();

@@ -31,6 +31,7 @@ use Waguilar\FilamentGuardian\Commands\SyncPermissionsCommand;
 use Waguilar\FilamentGuardian\Contracts\PermissionKeyBuilder as PermissionKeyBuilderContract;
 use Waguilar\FilamentGuardian\Exceptions\SuperAdminProtectedException;
 use Waguilar\FilamentGuardian\Facades\Guardian;
+use Waguilar\FilamentGuardian\Support\PanelComponents;
 use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
 use Waguilar\FilamentGuardian\Support\RelationManagerDiscoverer;
 use Waguilar\FilamentGuardian\Support\RelationManagerPolicyDetector;
@@ -162,7 +163,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
     protected function registerResourcePolicies(): void
     {
         foreach (Filament::getPanels() as $panel) {
-            foreach ($panel->getResources() as $resourceClass) {
+            foreach (PanelComponents::resources($panel) as $resourceClass) {
                 if (! ResourcePolicyDetector::usesResourcePolicy($resourceClass)) {
                     continue;
                 }
@@ -184,7 +185,7 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         $seen = [];
 
         foreach (Filament::getPanels() as $panel) {
-            foreach ($panel->getResources() as $resourceClass) {
+            foreach (PanelComponents::resources($panel) as $resourceClass) {
                 foreach (RelationManagerDiscoverer::collectClasses($resourceClass) as $rmClass) {
                     if (isset($seen[$rmClass])) {
                         continue;

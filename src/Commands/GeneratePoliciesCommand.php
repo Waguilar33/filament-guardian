@@ -12,6 +12,7 @@ use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Waguilar\FilamentGuardian\Commands\Concerns\DiscoversEntities;
 use Waguilar\FilamentGuardian\Commands\Concerns\GeneratesPolicies;
+use Waguilar\FilamentGuardian\Support\PanelComponents;
 
 use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\select;
@@ -195,7 +196,7 @@ class GeneratePoliciesCommand extends Command
     protected function getResourcesToProcess(Panel $panel): array
     {
         /** @var array<int, class-string<resource>> $resources */
-        $resources = array_values($panel->getResources());
+        $resources = PanelComponents::resources($panel);
 
         // When using --all-panels, automatically include all resources
         if ($this->option('all-resources') || $this->option('all-panels')) {
