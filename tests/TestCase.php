@@ -21,6 +21,8 @@ use Orchestra\Testbench\TestCase as Orchestra;
 use RyanChandler\BladeCaptureDirective\BladeCaptureDirectiveServiceProvider;
 use Spatie\Permission\PermissionServiceProvider;
 use Waguilar\FilamentGuardian\FilamentGuardianServiceProvider;
+use Waguilar\FilamentGuardian\Tests\Fixtures\Models\User;
+use Waguilar\FilamentGuardian\Tests\Fixtures\Providers\AdminPanelProvider;
 
 class TestCase extends Orchestra
 {
@@ -51,6 +53,7 @@ class TestCase extends Orchestra
             WidgetsServiceProvider::class,
             PermissionServiceProvider::class,
             FilamentGuardianServiceProvider::class,
+            AdminPanelProvider::class,
         ];
 
         sort($providers);
@@ -60,6 +63,15 @@ class TestCase extends Orchestra
 
     public function getEnvironmentSetUp($app): void
     {
+        $app['config']->set('app.key', 'AckfSECXIvnK5r28GVIWUAxmbBSjTsmF');
         $app['config']->set('database.default', 'testing');
+        $app['config']->set('auth.providers.users.model', User::class);
+    }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadLaravelMigrations();
+
+        (include __DIR__ . '/../vendor/spatie/laravel-permission/database/migrations/create_permission_tables.php.stub')->up();
     }
 }
