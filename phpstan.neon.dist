@@ -11,4 +11,10 @@ parameters:
     tmpDir: build/phpstan
     checkOctaneCompatibility: true
     checkModelProperties: true
+    ignoreErrors:
+        # Livewire 4 made Testable generic; Livewire 3 rejects a generic @mixin, so neither form suits both.
+        -
+            identifier: missingType.generics
+            path: src/Testing/TestsFilamentGuardian.php
+            reportUnmatched: false
 
