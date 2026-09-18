@@ -235,7 +235,7 @@ return [
             'icon' => null,         // e.g., 'heroicon-o-shield-check' or Heroicon::OutlinedShieldCheck
             'active_icon' => null,  // Icon shown when navigation item is active
             'label' => null,        // Navigation label (defaults to plural model label)
-            'group' => null,        // Navigation group
+            'group' => null,        // e.g., 'Settings' or \App\Enums\NavigationGroup::Settings
             'sort' => null,         // Sort order (integer)
             'badge' => null,        // Badge text (use closures in fluent API for dynamic values)
             'badge_color' => null,  // Badge color

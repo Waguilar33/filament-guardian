@@ -8,6 +8,7 @@ use BackedEnum;
 use Closure;
 use Filament\Clusters\Cluster;
 use Filament\Support\Concerns\EvaluatesClosures;
+use UnitEnum;
 
 trait HasNavigation
 {
@@ -27,7 +28,7 @@ trait HasNavigation
 
     protected string | Closure | null $cluster = null;
 
-    protected string | Closure | null $navigationGroup = null;
+    protected string | UnitEnum | Closure | null $navigationGroup = null;
 
     protected int | Closure | null $navigationSort = null;
 
@@ -90,7 +91,7 @@ trait HasNavigation
         return $this;
     }
 
-    public function navigationGroup(string | Closure | null $group): static
+    public function navigationGroup(string | UnitEnum | Closure | null $group): static
     {
         $this->navigationGroup = $group;
 
@@ -265,16 +266,16 @@ trait HasNavigation
         return $configValue;
     }
 
-    public function getNavigationGroup(): ?string
+    public function getNavigationGroup(): string | UnitEnum | null
     {
         if ($this->navigationGroup !== null) {
-            /** @var string|null $result */
+            /** @var string|UnitEnum|null $result */
             $result = $this->evaluate($this->navigationGroup);
 
             return $result;
         }
 
-        /** @var string|null $configValue */
+        /** @var string|UnitEnum|null $configValue */
         $configValue = config('filament-guardian.role_resource.navigation.group');
 
         return $configValue;

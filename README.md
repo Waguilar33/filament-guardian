@@ -1246,6 +1246,13 @@ FilamentGuardianPlugin::make()
     ->registerNavigation(true)
 ```
 
+`navigationGroup()` also accepts an enum case. Pass the same case your other resources use and the RoleResource joins that group — keeping the sort order, icon, and collapsible setting you registered for it with `->navigationGroups()`:
+
+```php
+FilamentGuardianPlugin::make()
+    ->navigationGroup(\App\Enums\NavigationGroup::Settings)
+```
+
 ### 2. Cluster
 
 Place the RoleResource inside a Filament cluster so it appears under that cluster's sub-navigation. Pass the cluster class directly:
