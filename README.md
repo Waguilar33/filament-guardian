@@ -954,6 +954,8 @@ public function detach(AuthUser $authUser, Role $role): bool
 
 If `RolePolicy` defines neither method, membership falls back to `Update:Role` — so a hand-written or trimmed policy keeps working, and deleting the two methods is how you opt out. The permissions are created either way; they simply have no effect until the policy uses them.
 
+The super-admin role is the exception: only a super admin can attach or detach its users, whatever the policy says. Otherwise anyone holding `Attach:Role` could promote themselves to a full Gate bypass.
+
 > **Important:** `attach` and `detach` receive the role record, so they're two-parameter policy methods. Don't add them to `policies.single_parameter_methods` — the generated signature would stop matching what the gate passes.
 
 ## Resource-Based Policies
@@ -1597,7 +1599,7 @@ TextInput::make('name')
 
 The Role resource includes a Users tab on the view page, backed by a relation manager that lets you attach and detach users directly from a role — no need to navigate to each user individually.
 
-The tab shows users assigned to the role with Name and Email columns, supports search and bulk operations, and automatically excludes users who already hold the super-admin role from the attach dropdown.
+The tab shows users assigned to the role with Name and Email columns, and supports search and bulk operations.
 
 ### 1. Customization
 

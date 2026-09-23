@@ -16,7 +16,9 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Gate;
+use Spatie\Permission\Contracts\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Waguilar\FilamentGuardian\Facades\Guardian;
 
 class BaseUsersTable
 {
@@ -90,8 +92,14 @@ class BaseUsersTable
      */
     protected static function canManageMembership(Model $ownerRecord, string $ability): bool
     {
+        $user = Filament::auth()->user();
+
+        if ($ownerRecord instanceof Role && Guardian::isSuperAdminRole($ownerRecord) && ! Guardian::userIsSuperAdmin($user)) {
+            return false;
+        }
+
         /** @var mixed $response */
-        $response = Gate::forUser(Filament::auth()->user())->raw($ability, $ownerRecord);
+        $response = Gate::forUser($user)->raw($ability, $ownerRecord);
 
         if ($response === null) {
             return self::canUpdate($ownerRecord);
