@@ -162,7 +162,7 @@ abstract class BaseRoleResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return static::$navigationLabel ?? static::plugin()?->getNavigationLabel() ?? parent::getNavigationLabel();
+        return static::$navigationLabel ?? static::plugin()?->getNavigationLabel() ?? static::getTitleCasePluralModelLabel();
     }
 
     public static function getNavigationGroup(): string | UnitEnum | null

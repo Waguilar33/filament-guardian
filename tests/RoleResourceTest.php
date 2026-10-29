@@ -6,6 +6,7 @@ use Filament\Facades\Filament;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Waguilar\FilamentGuardian\Base\Roles\RelationManagers\BaseUsersRelationManager;
+use Waguilar\FilamentGuardian\Facades\Guardian;
 use Waguilar\FilamentGuardian\Resources\Roles\Pages\ViewRole;
 use Waguilar\FilamentGuardian\Resources\Roles\RoleResource;
 use Waguilar\FilamentGuardian\Tests\Fixtures\Models\User;
@@ -20,7 +21,10 @@ it('registers the role resource on a panel using the plugin', function () {
 it('renders every role resource page', function () {
     $role = Role::create(['name' => 'Editor']);
 
-    actingAs(User::create(['name' => 'Admin', 'email' => 'admin@example.com', 'password' => 'password']));
+    $admin = User::create(['name' => 'Admin', 'email' => 'admin@example.com', 'password' => 'password']);
+    $admin->assignRole(Role::create(['name' => Guardian::getSuperAdminRoleName()]));
+
+    actingAs($admin);
 
     get(RoleResource::getUrl('index'))->assertOk();
     get(RoleResource::getUrl('create'))->assertOk();

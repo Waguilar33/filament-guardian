@@ -212,7 +212,9 @@ final class PermissionResolver
         /** @var Collection<string, string> $labels */
         $labels = collect($subjects)->map(function (string $pageClass): string {
             /** @var class-string<Page> $pageClass */
-            return $pageClass::getNavigationLabel();
+            $label = $pageClass::getNavigationLabel();
+
+            return $label instanceof Htmlable ? $label->toHtml() : $label;
         });
 
         return $labels;

@@ -17,4 +17,8 @@ parameters:
             identifier: missingType.generics
             path: src/Testing/TestsFilamentGuardian.php
             reportUnmatched: false
-
+        # Page::getNavigationLabel() returns only string before Filament 4.16 and 5.11.
+        -
+            identifier: instanceof.alwaysFalse
+            path: src/Support/PermissionResolver.php
+            reportUnmatched: false

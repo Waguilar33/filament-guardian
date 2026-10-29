@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Waguilar\FilamentGuardian\Support;
 
+use BackedEnum;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
@@ -42,7 +43,7 @@ final class PolicyAuthorizer
         if (! $checkPolicyExistence) {
             // The caller opted out of requiring a policy, so a Gate::define()d ability
             // is enough on its own. Strict mode still refuses to let both be missing.
-            if (Filament::isAuthorizationStrict() && ! Gate::forUser($user)->has($action) && ! $hasPolicyMethod) {
+            if (Filament::isAuthorizationStrict() && ! Gate::forUser($user)->has(self::abilityName($action)) && ! $hasPolicyMethod) {
                 throw new LogicException(self::missingPolicyMessage($subject, $methodName, $policy, abilityChecked: true));
             }
 
@@ -58,6 +59,15 @@ final class PolicyAuthorizer
         }
 
         return Gate::forUser($user)->inspect($action, $arguments);
+    }
+
+    private static function abilityName(string | UnitEnum $action): string
+    {
+        return match (true) {
+            $action instanceof BackedEnum => (string) $action->value,
+            $action instanceof UnitEnum => $action->name,
+            default => $action,
+        };
     }
 
     private static function missingPolicyMessage(
