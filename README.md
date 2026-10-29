@@ -1147,6 +1147,18 @@ The trait does two things:
 
 Run `guardian:policies` then `guardian:sync` and the new policy and permissions appear, plus a card on the role form for the relation manager subject.
 
+The trait registers the policy the first time Filament authorizes the relation manager. If you also check the gate against the relation manager class directly — from a queued job or console command, outside Filament — register the policy yourself:
+
+```php
+// app/Providers/AppServiceProvider.php
+public function boot(): void
+{
+    Gate::policy(OrderItemsRelationManager::class, OrderItemsPolicy::class);
+}
+```
+
+Guardian leaves a policy you register in place.
+
 ### 4. What you need to update in your application
 
 Same three pitfalls as the Resource-Based Policies section, with the relation manager class in the role of the resource class.

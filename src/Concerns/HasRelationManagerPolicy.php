@@ -7,6 +7,7 @@ namespace Waguilar\FilamentGuardian\Concerns;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Model;
 use Waguilar\FilamentGuardian\Support\PolicyAuthorizer;
+use Waguilar\FilamentGuardian\Support\RelationManagerPolicyRegistrar;
 
 trait HasRelationManagerPolicy
 {
@@ -15,6 +16,8 @@ trait HasRelationManagerPolicy
         if (static::shouldSkipAuthorization()) {
             return true;
         }
+
+        RelationManagerPolicyRegistrar::ensureRegistered(static::class);
 
         return PolicyAuthorizer::inspect(
             subject: static::class,
@@ -30,6 +33,8 @@ trait HasRelationManagerPolicy
         if (static::shouldSkipAuthorization()) {
             return Response::allow();
         }
+
+        RelationManagerPolicyRegistrar::ensureRegistered(static::class);
 
         $arguments = $record !== null ? [static::class, $record] : [static::class];
 

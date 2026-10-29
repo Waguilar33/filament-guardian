@@ -8,6 +8,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Waguilar\FilamentGuardian\FilamentGuardianPlugin;
+use Waguilar\FilamentGuardian\Tests\Fixtures\Resources\Users\UserResource;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -20,6 +21,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->resources([UserResource::class])
             ->plugin(FilamentGuardianPlugin::make());
     }
 }

@@ -33,8 +33,6 @@ use Waguilar\FilamentGuardian\Exceptions\SuperAdminProtectedException;
 use Waguilar\FilamentGuardian\Facades\Guardian;
 use Waguilar\FilamentGuardian\Support\PanelComponents;
 use Waguilar\FilamentGuardian\Support\PermissionKeyBuilder;
-use Waguilar\FilamentGuardian\Support\RelationManagerDiscoverer;
-use Waguilar\FilamentGuardian\Support\RelationManagerPolicyDetector;
 use Waguilar\FilamentGuardian\Support\ResourcePolicyDetector;
 use Waguilar\FilamentGuardian\Testing\TestsFilamentGuardian;
 
@@ -143,7 +141,6 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         $this->registerRoleDefaults();
         $this->registerBundledRolePolicy();
         $this->registerResourcePolicies();
-        $this->registerRelationManagerPolicies();
     }
 
     protected function registerBundledRolePolicy(): void
@@ -179,35 +176,8 @@ class FilamentGuardianServiceProvider extends PackageServiceProvider
         }
     }
 
-    protected function registerRelationManagerPolicies(): void
-    {
-        /** @var array<class-string, true> $seen */
-        $seen = [];
-
-        foreach (Filament::getPanels() as $panel) {
-            foreach (PanelComponents::resources($panel) as $resourceClass) {
-                foreach (RelationManagerDiscoverer::collectClasses($resourceClass) as $rmClass) {
-                    if (isset($seen[$rmClass])) {
-                        continue;
-                    }
-
-                    $seen[$rmClass] = true;
-
-                    if (! RelationManagerPolicyDetector::usesRelationManagerPolicy($rmClass)) {
-                        continue;
-                    }
-
-                    $policyClass = RelationManagerPolicyDetector::getPolicyClass($rmClass);
-
-                    if (! class_exists($policyClass)) {
-                        continue;
-                    }
-
-                    Gate::policy($rmClass, $policyClass);
-                }
-            }
-        }
-    }
+    /** @deprecated Relation manager policies now register on first use; this does nothing. */
+    protected function registerRelationManagerPolicies(): void {}
 
     protected function registerSuperAdminGate(): void
     {
