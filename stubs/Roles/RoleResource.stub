@@ -16,7 +16,7 @@ class RoleResource extends BaseRoleResource
     public static function getRelations(): array
     {
         return [
-            UsersRelationManager::class,
+            'users' => UsersRelationManager::class,
         ];
     }
 

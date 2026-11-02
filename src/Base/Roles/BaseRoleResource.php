@@ -112,12 +112,12 @@ abstract class BaseRoleResource extends Resource
     }
 
     /**
-     * @return array<class-string>
+     * @return array<string, class-string>
      */
     public static function getRelations(): array
     {
         return [
-            BaseUsersRelationManager::class,
+            'users' => BaseUsersRelationManager::class,
         ];
     }
 
