@@ -580,10 +580,10 @@ final class PermissionResolver
             return $config['label'];
         }
 
-        $static = self::readRelationManagerStaticLabel($rmClass);
+        $label = self::callRelationManagerPluralModelLabel($rmClass);
 
-        if ($static !== null) {
-            return $static;
+        if ($label !== null) {
+            return $label;
         }
 
         return $usesPolicyTrait
@@ -592,28 +592,17 @@ final class PermissionResolver
     }
 
     /**
-     * Reads Filament's deprecated-but-still-respected static label properties
-     * on the relation manager. Returns the first non-empty string found
-     * (pluralModelLabel wins over pluralLabel).
-     *
      * @param  class-string<RelationManager>  $rmClass
      */
-    private static function readRelationManagerStaticLabel(string $rmClass): ?string
+    private static function callRelationManagerPluralModelLabel(string $rmClass): ?string
     {
-        foreach (['pluralModelLabel', 'pluralLabel'] as $property) {
-            try {
-                $reflection = new ReflectionProperty($rmClass, $property);
-                $value = $reflection->getValue();
-            } catch (Throwable) {
-                continue;
-            }
-
-            if (is_string($value) && $value !== '') {
-                return $value;
-            }
+        try {
+            $label = (new ReflectionMethod($rmClass, 'getPluralModelLabel'))->invoke(null);
+        } catch (Throwable) {
+            return null;
         }
 
-        return null;
+        return is_string($label) && $label !== '' ? $label : null;
     }
 
     /**

@@ -1103,9 +1103,23 @@ Switch to the relation manager's class basename (minus the `RelationManager` suf
 
 The card label shown in the role-management UI defaults to a humanized plural of the related model's class name (e.g. `AccountIdentification` → "Account Identifications"). Override it by either:
 
+- Overriding the relation manager's `getPluralModelLabel()` method — the only option that can call `__()`, so use it when the label must follow the user's locale:
+
+  ```php
+  // app/Filament/RelationManagers/IdentificationsRelationManager.php
+  class IdentificationsRelationManager extends RelationManager
+  {
+      protected static function getPluralModelLabel(): ?string
+      {
+          return __('identifications.plural');
+      }
+  }
+  ```
+
 - Setting the relation manager's static `$pluralModelLabel` property (Filament's standard label property, still respected in v5):
 
   ```php
+  // app/Filament/RelationManagers/IdentificationsRelationManager.php
   class IdentificationsRelationManager extends RelationManager
   {
       protected static ?string $pluralModelLabel = 'Identificaciones';
@@ -1115,6 +1129,7 @@ The card label shown in the role-management UI defaults to a humanized plural of
 - Adding a `label` entry to the config override:
 
   ```php
+  // config/filament-guardian.php
   'manage' => [
       \App\Filament\RelationManagers\IdentificationsRelationManager::class => [
           'label' => 'Identificaciones',
@@ -1122,7 +1137,7 @@ The card label shown in the role-management UI defaults to a humanized plural of
   ],
   ```
 
-The config entry takes priority. Both produce the same outcome — pick the one that fits where you'd rather declare it.
+The config entry takes priority, then `getPluralModelLabel()` — Filament's default implementation returns `$pluralModelLabel`, falling back to `$pluralLabel` — then the humanized model name. Config strings and static properties can't call `__()`, so they show the same text in every locale.
 
 ### 3. Opt-in: `HasRelationManagerPolicy`
 
