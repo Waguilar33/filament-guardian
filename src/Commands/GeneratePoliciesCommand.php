@@ -98,14 +98,13 @@ class GeneratePoliciesCommand extends Command
             }
         }
 
-        $availablePanels = collect(Filament::getPanels())->keys()->all();
-        if (! in_array($panelId, $availablePanels, true)) {
+        $panel = Filament::getPanels()[$panelId] ?? null;
+
+        if ($panel === null) {
             $this->components->error("Panel '{$panelId}' not found.");
 
             return self::FAILURE;
         }
-
-        $panel = Filament::getPanel($panelId);
 
         return $this->processPanel($panel) ? self::SUCCESS : self::FAILURE;
     }

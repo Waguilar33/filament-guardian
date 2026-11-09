@@ -10,6 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 use Waguilar\FilamentGuardian\Facades\Guardian;
@@ -69,7 +70,7 @@ class CreateUserCommand extends Command
         $panelId = $this->option('panel');
 
         $panel = $panelId !== null
-            ? Filament::getPanel($panelId)
+            ? Filament::getPanel($panelId) ?? throw new InvalidArgumentException("Panel '{$panelId}' not found.")
             : Filament::getDefaultPanel();
 
         $guard = Auth::guard($panel->getAuthGuard());

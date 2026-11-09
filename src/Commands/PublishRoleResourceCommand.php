@@ -36,6 +36,12 @@ class PublishRoleResourceCommand extends Command
 
         $panel = Filament::getPanel($panelId);
 
+        if ($panel === null) {
+            $this->error("Panel '{$panelId}' not found.");
+
+            return self::FAILURE;
+        }
+
         $directories = $panel->getResourceDirectories();
         $namespaces = $panel->getResourceNamespaces();
 
