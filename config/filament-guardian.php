@@ -32,6 +32,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Privilege Escalation
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, a user can only grant permissions they hold themselves in
+    | the current team: saving a role refuses newly ticked permissions the
+    | user lacks, and attaching users to a role refuses when the role holds
+    | a permission the user lacks. Super admins bypass the rule.
+    |
+    */
+
+    'prevent_privilege_escalation' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Permission Key Builder
     |--------------------------------------------------------------------------
     |
