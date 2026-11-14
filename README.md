@@ -555,7 +555,7 @@ Both layers respect the `enabled` flag — if you disable super-admin in the con
 
 ## Privilege Escalation
 
-A user can only grant permissions they hold themselves in the current team. This stops anyone with `Update:Role`, `Create:Role` or `Attach:Role` from handing themselves, or anyone else, more access than they have.
+When turned on, a user can only grant permissions they hold themselves in the current team. This stops anyone with `Update:Role`, `Create:Role` or `Attach:Role` from handing themselves, or anyone else, more access than they have.
 
 | Where | What is refused |
 |---|---|
@@ -565,16 +565,16 @@ A user can only grant permissions they hold themselves in the current team. This
 
 A refused save or attach shows a notification naming the missing permissions, and nothing is written. Super admins bypass the rule.
 
-The rule is on by default. Turn it off globally in the config, or per panel on the plugin:
+The rule is off by default. Turn it on globally in the config, or per panel on the plugin:
 
 ```php
 // config/filament-guardian.php
-'prevent_privilege_escalation' => false,
+'prevent_privilege_escalation' => true,
 ```
 
 ```php
 FilamentGuardianPlugin::make()
-    ->preventPrivilegeEscalation(false)
+    ->preventPrivilegeEscalation()
 ```
 
 The same check is available on the facade, for your own screens that grant roles or permissions:

@@ -28,7 +28,7 @@ class FilamentGuardian
 
     public const DEFAULT_SUPER_ADMIN_INTERCEPT = 'before';
 
-    public const DEFAULT_PREVENT_PRIVILEGE_ESCALATION = true;
+    public const DEFAULT_PREVENT_PRIVILEGE_ESCALATION = false;
 
     /** @var (Closure(class-string<Model>, array{name: string, email: string, password: string}): Model)|null */
     protected ?Closure $createUserCallback = null;

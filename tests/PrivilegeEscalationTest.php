@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -20,6 +21,8 @@ use function Pest\Laravel\actingAs;
 
 beforeEach(function () {
     Filament::setCurrentPanel('admin');
+
+    config(['filament-guardian.prevent_privilege_escalation' => true]);
 
     foreach (['ViewAny:User', 'View:User', 'Delete:User'] as $name) {
         Permission::create(['name' => $name]);
@@ -127,8 +130,10 @@ it('grants any permission when the plugin opts out', function () {
     expect($role->fresh()->permissions->pluck('name')->all())->toBe(['Delete:User']);
 });
 
-it('attaches to any role when the config opts out', function () {
-    config(['filament-guardian.prevent_privilege_escalation' => false]);
+it('attaches to any role when the rule is left off', function () {
+    $guardianConfig = config('filament-guardian');
+    Arr::forget($guardianConfig, 'prevent_privilege_escalation');
+    config(['filament-guardian' => $guardianConfig]);
 
     $role = Role::create(['name' => 'Editor'])->givePermissionTo('Delete:User');
 

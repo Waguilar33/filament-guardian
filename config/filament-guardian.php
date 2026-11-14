@@ -13,7 +13,7 @@ return [
     | Super Admin
     |--------------------------------------------------------------------------
     |
-    | When enabled, super-admin users bypass all permission checks via
+    | Off by default. When enabled, super-admin users bypass all permission checks via
     | Gate. The role is auto-created for tenant panels when a
     | tenant is created, or manually via guardian:super-admin command
     | for non-tenant panels.
@@ -42,7 +42,7 @@ return [
     |
     */
 
-    'prevent_privilege_escalation' => true,
+    'prevent_privilege_escalation' => false,
 
     /*
     |--------------------------------------------------------------------------
