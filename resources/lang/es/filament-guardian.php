@@ -132,16 +132,4 @@ return [
         'full_access' => 'Este rol puede acceder a todo en el sistema.',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Privilege Escalation
-    |--------------------------------------------------------------------------
-    */
-
-    'privilege_escalation' => [
-        'cannot_grant' => 'No puedes otorgar permisos que no tienes.',
-        'cannot_attach' => 'No puedes agregar usuarios a un rol con permisos que no tienes.',
-        'missing' => 'Permisos que no tienes: :permissions',
-    ],
-
 ];

@@ -34,8 +34,6 @@ class FilamentGuardianPlugin implements Plugin
 
     protected ?string $superAdminIntercept = null;
 
-    protected ?bool $preventPrivilegeEscalation = null;
-
     public function getId(): string
     {
         return 'filament-guardian';
@@ -242,19 +240,5 @@ class FilamentGuardianPlugin implements Plugin
     {
         /** @var string */
         return $this->superAdminIntercept ?? config('filament-guardian.super_admin.intercept', FilamentGuardian::DEFAULT_SUPER_ADMIN_INTERCEPT);
-    }
-
-    /** @api */
-    public function preventPrivilegeEscalation(bool $condition = true): static
-    {
-        $this->preventPrivilegeEscalation = $condition;
-
-        return $this;
-    }
-
-    public function isPrivilegeEscalationPrevented(): bool
-    {
-        /** @var bool */
-        return $this->preventPrivilegeEscalation ?? config('filament-guardian.prevent_privilege_escalation', FilamentGuardian::DEFAULT_PREVENT_PRIVILEGE_ESCALATION);
     }
 }

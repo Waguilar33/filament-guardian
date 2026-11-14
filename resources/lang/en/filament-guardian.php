@@ -133,16 +133,4 @@ return [
         'full_access' => 'This role can access everything in the system.',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Privilege Escalation
-    |--------------------------------------------------------------------------
-    */
-
-    'privilege_escalation' => [
-        'cannot_grant' => 'You cannot grant permissions you do not have.',
-        'cannot_attach' => 'You cannot add users to a role with permissions you do not have.',
-        'missing' => 'Permissions you do not have: :permissions',
-    ],
-
 ];
