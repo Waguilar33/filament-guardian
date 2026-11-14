@@ -10,9 +10,11 @@ use Filament\Panel;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Unique;
 use RuntimeException;
+use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Contracts\Role as RoleContract;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -25,6 +27,8 @@ class FilamentGuardian
     public const DEFAULT_SUPER_ADMIN_ROLE_NAME = 'Super Admin';
 
     public const DEFAULT_SUPER_ADMIN_INTERCEPT = 'before';
+
+    public const DEFAULT_PREVENT_PRIVILEGE_ESCALATION = false;
 
     /** @var (Closure(class-string<Model>, array{name: string, email: string, password: string}): Model)|null */
     protected ?Closure $createUserCallback = null;
@@ -225,6 +229,47 @@ class FilamentGuardian
         $guard = Filament::getCurrentPanel()?->getAuthGuard();
 
         return (bool) ([$user, 'hasRole'])($this->getSuperAdminRoleName(), $guard); // @phpstan-ignore callable.nonCallable
+    }
+
+    public function isPrivilegeEscalationPrevented(?string $panelId = null): bool
+    {
+        /** @var bool */
+        return $this->resolvePluginForPanel($panelId)?->isPrivilegeEscalationPrevented()
+            ?? config('filament-guardian.prevent_privilege_escalation', self::DEFAULT_PREVENT_PRIVILEGE_ESCALATION);
+    }
+
+    /**
+     * The given permissions the user does not hold in the current team, under the current panel's guard.
+     *
+     * @param  iterable<int, string>  $permissions
+     * @return Collection<int, string>
+     *
+     * @api
+     */
+    public function permissionsUserCannotGrant(mixed $user, iterable $permissions): Collection
+    {
+        /** @var Collection<int, string> $requested */
+        $requested = collect($permissions)->unique()->values();
+
+        if (! $this->isPrivilegeEscalationPrevented() || $this->userIsSuperAdmin($user)) {
+            return $requested->take(0);
+        }
+
+        if (! $user instanceof Authenticatable || ! $this->userUsesHasRolesTrait($user)) {
+            return $requested;
+        }
+
+        $guard = Filament::getCurrentPanel()?->getAuthGuard();
+
+        /** @var Collection<int, Permission> $held */
+        $held = ([$user, 'getAllPermissions'])(); // @phpstan-ignore callable.nonCallable
+
+        /** @var Collection<int, string> $heldNames */
+        $heldNames = $held
+            ->when($guard !== null, fn (Collection $permissions): Collection => $permissions->where('guard_name', $guard))
+            ->pluck('name');
+
+        return $requested->diff($heldNames)->values();
     }
 
     /**

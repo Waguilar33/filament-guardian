@@ -13,7 +13,7 @@ return [
     | Super Admin
     |--------------------------------------------------------------------------
     |
-    | When enabled, super-admin users bypass all permission checks via
+    | Off by default. When enabled, super-admin users bypass all permission checks via
     | Gate. The role is auto-created for tenant panels when a
     | tenant is created, or manually via guardian:super-admin command
     | for non-tenant panels.
@@ -29,6 +29,20 @@ return [
         'role_name' => 'Super Admin',
         'intercept' => 'before',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Privilege Escalation
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, a user can only grant permissions they hold themselves in
+    | the current team: saving a role refuses newly ticked permissions the
+    | user lacks, and attaching users to a role refuses when the role holds
+    | a permission the user lacks. Super admins bypass the rule.
+    |
+    */
+
+    'prevent_privilege_escalation' => false,
 
     /*
     |--------------------------------------------------------------------------

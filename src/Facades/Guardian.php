@@ -7,6 +7,7 @@ namespace Waguilar\FilamentGuardian\Facades;
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Facade;
 use Spatie\Permission\Contracts\Role as RoleContract;
 use Spatie\Permission\Models\Role;
@@ -19,6 +20,8 @@ use Waguilar\FilamentGuardian\FilamentGuardian;
  * @method static string getSuperAdminIntercept(?string $panelId = null)
  * @method static bool isSuperAdminRole(RoleContract $role)
  * @method static bool userIsSuperAdmin(mixed $user)
+ * @method static bool isPrivilegeEscalationPrevented(?string $panelId = null)
+ * @method static Collection<int, string> permissionsUserCannotGrant(mixed $user, iterable<int, string> $permissions)
  * @method static Role createSuperAdminRole(?string $panelId = null)
  * @method static Role createSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null)
  * @method static Role|null getSuperAdminRoleForTenant(?Model $tenant = null, ?string $guard = null, ?string $panelId = null)
