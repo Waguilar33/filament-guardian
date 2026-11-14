@@ -553,6 +553,39 @@ Both layers respect the `enabled` flag — if you disable super-admin in the con
 
 `SuperAdminProtectedException` extends `RuntimeException`, so you can catch it if you need to handle the error gracefully in application code.
 
+## Privilege Escalation
+
+A user can only grant permissions they hold themselves in the current team. This stops anyone with `Update:Role`, `Create:Role` or `Attach:Role` from handing themselves, or anyone else, more access than they have.
+
+| Where | What is refused |
+|---|---|
+| Edit role | Saving when a newly ticked permission is one the user lacks. Unticking is always allowed, and permissions the role already had stay as they are. |
+| Create role | Saving when any ticked permission is one the user lacks. |
+| Users tab — Attach | Attaching anyone, the user included, to a role that holds a permission the user lacks. |
+
+A refused save or attach shows a notification naming the missing permissions, and nothing is written. Super admins bypass the rule.
+
+The rule is on by default. Turn it off globally in the config, or per panel on the plugin:
+
+```php
+// config/filament-guardian.php
+'prevent_privilege_escalation' => false,
+```
+
+```php
+FilamentGuardianPlugin::make()
+    ->preventPrivilegeEscalation(false)
+```
+
+The same check is available on the facade, for your own screens that grant roles or permissions:
+
+```php
+Guardian::isPrivilegeEscalationPrevented(?string $panelId); // bool
+Guardian::permissionsUserCannotGrant($user, $permissions);  // Collection of permission names the user lacks
+```
+
+> **Not covered:** the `ManageUserPermissionsAction` direct-permissions modal, and any role assignment your app does outside the role's Users tab, such as a roles field on a user form.
+
 ## Permission Key Format
 
 Every permission the package generates and checks follows a consistent `action:subject` format — for example `ViewAny:User` or `Access:Dashboard`. The separator and case are configurable, and the entire key-building algorithm can be swapped out if you need something the config options alone can't express.
