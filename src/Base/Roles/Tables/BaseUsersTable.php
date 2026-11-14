@@ -9,14 +9,12 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DetachAction;
 use Filament\Actions\DetachBulkAction;
 use Filament\Facades\Filament;
-use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Contracts\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -43,9 +41,6 @@ class BaseUsersTable
                     ->multiple()
                     ->authorize(function (RelationManager $livewire): bool {
                         return self::canAttach($livewire->getOwnerRecord());
-                    })
-                    ->before(function (AttachAction $action, RelationManager $livewire): void {
-                        self::haltWhenRoleHoldsUnheldPermissions($action, $livewire->getOwnerRecord());
                     })
                     // Spatie's Role::users() is a bare morphedByMany with no pivot
                     // columns declared, so Filament has none to carry and cannot write
@@ -113,30 +108,6 @@ class BaseUsersTable
         return $response instanceof Response
             ? $response->allowed()
             : (bool) $response;
-    }
-
-    protected static function haltWhenRoleHoldsUnheldPermissions(AttachAction $action, Model $ownerRecord): void
-    {
-        if (! $ownerRecord instanceof Role) {
-            return;
-        }
-
-        /** @var Collection<int, string> $rolePermissions */
-        $rolePermissions = collect($ownerRecord->permissions->pluck('name'));
-
-        $unheld = Guardian::permissionsUserCannotGrant(Filament::auth()->user(), $rolePermissions);
-
-        if ($unheld->isEmpty()) {
-            return;
-        }
-
-        Notification::make()
-            ->danger()
-            ->title(__('filament-guardian::filament-guardian.privilege_escalation.cannot_attach'))
-            ->body(__('filament-guardian::filament-guardian.privilege_escalation.missing', ['permissions' => $unheld->implode(', ')]))
-            ->send();
-
-        $action->halt();
     }
 
     /**
